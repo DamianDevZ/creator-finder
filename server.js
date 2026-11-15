@@ -378,10 +378,11 @@ function renderChips() {
         v?.img,
       ].filter(Boolean);
       im.src = src;
-      im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
+      im.style.cssText = 'width:100%;display:block';
       im.onerror = () => { const n = tries.shift(); if (n) im.src = n; else im.remove(); };
       d.appendChild(im);
     }
+    if (v?.appid) { d.style.cursor = 'pointer'; d.onclick = () => window.open('https://store.steampowered.com/app/' + v.appid + '/', '_blank'); }
     d.insertAdjacentHTML('beforeend', '<div class="gname">' + name + '</div>'
       + '<div class="gtags">' + (v?.tags || []).slice(0, 3).map((t) => '<span class="tag sm">' + t + '</span>').join('') + '</div><span class="x">&times;</span>');
     d.querySelector('.x').onclick = (e) => { e.stopPropagation(); simMap.delete(name); renderChips(); };
@@ -671,19 +672,18 @@ $('go').onclick = async () => {
   maybeExpand();
 };
 
-// Rolling expansion: keep at least one untouched batch of ~20 candidates
-// queued up at all times. The moment the first verdict lands (or the queue
-// otherwise drops under two batches), the next frontier round is fetched and
-// fully processed in the background — including AI notes.
+// Rolling expansion: keep ~100 unscored candidates ahead at all times.
+// Frontier rounds run continuously in the background — verdicts should never
+// outrun the pool unless the frontier is genuinely exhausted.
 async function maybeExpand() {
   if (expanding || !lastGame || expandDone) return;
   const left = () => Object.values(poolFor(lastGame)).filter((r) => !((lists[activeList] && lists[activeList].verdicts) || {})[r.channelId]).length;
-  if (left() >= 40) return;
+  if (left() >= 100) return;
   expanding = true;
   try {
     const pool = (pools[lastGame] ||= {});
     let added = 0, rounds = 0;
-    while (added < 20 && rounds < 4) {
+    while (added < 50 && rounds < 4) {
       if (!expandBuffer.length) {
         if (!await fetchRound()) { expandDone = true; break; }
         rounds++;
