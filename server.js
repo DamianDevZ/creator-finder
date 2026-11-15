@@ -492,7 +492,7 @@ autocomplete('addtag', 'tagdd', '/api/search-tags', (t) => { tagSet.add(t); rend
 $('load').onclick = async () => {
   $('status').innerHTML = '<span class="spinner"></span>Profiling game…';
   // Clear the previous game's results — a new game means a new queue.
-  lastResults = []; lastGame = ''; renderLists();
+  lastResults = []; lastGame = ''; $('lists').innerHTML = '';
   const res = await fetch('/api/fingerprint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: $('link').value }) });
   const j = await res.json();
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
@@ -613,7 +613,7 @@ document.addEventListener('click', (e) => {
 $('go').onclick = async () => {
   $('go').disabled = true;
   $('out').innerHTML = '';
-  lastResults = []; lastGame = ''; renderLists();
+  lastResults = []; lastGame = ''; $('lists').innerHTML = '';
   if (activeList) $('backlist').style.display = '';
   $('status').innerHTML = '<span class="spinner"></span>Scanning YouTube… usually 30–60s on a cold run.';
   const body = {
