@@ -8,7 +8,10 @@ import { scoreChannel, medianViews, daysSince } from './scoring.js';
 let searchDlp = null;
 try {
   ({ searchDlp } = await import('./dlp.js'));
-} catch {}
+  console.log('yt-dlp provider loaded');
+} catch (e) {
+  console.log('yt-dlp provider unavailable:', e.message);
+}
 import { extractContacts, extractAlias, classifyChannel } from './contacts.js';
 
 const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -28,15 +31,23 @@ export async function findCreators(input, yt, {
   const fp = await buildFingerprint(input, { manualTags });
   if (manualSimilar.length) fp.similarGames = manualSimilar.map((name, i) => ({ appid: `manual-${i}`, name }));
 
-  const names = [fp.name, ...fp.similarGames.slice(0, 14).map((g) => g.name)];
+  const names = [fp.name, ...fp.similarGames.map((g) => g.name), ...(fp.expandedGames || []).map((g) => g.name)];
   const queries = names
     .flatMap((n, i) => (i === 0 ? [`"${n}" gameplay`, `"${n}" review`] : [`"${n}" gameplay`]))
-    .slice(0, 20);
+    .slice(0, 22);
 
   const hits = new Map();
   for (const q of queries) {
     const gameName = names.find((n) => q.toLowerCase().includes(n.toLowerCase())) || q;
-    const results = dlp && searchDlp ? await searchDlp(q, 50 * pages) : await yt.searchVideos(q, 50, pages);
+    let results = [];
+    try {
+      results = dlp && searchDlp ? await searchDlp(q, 50 * pages) : await yt.searchVideos(q, 50, pages);
+    } catch (e) {
+      console.error(`search failed (${dlp && searchDlp ? 'dlp' : 'api'}) for "${q}":`, e.message);
+      if (dlp && searchDlp) {
+        try { results = await yt.searchVideos(q, 50, pages); } catch (e2) { console.error(`api fallback also failed for "${q}":`, e2.message); }
+      }
+    }
     for (const r of results) {
       const h = hits.get(r.channelId) || { channelTitle: r.channelTitle, videos: new Map(), games: new Set() };
       h.videos.set(r.videoId, { title: r.title, publishedAt: r.publishedAt, query: q });

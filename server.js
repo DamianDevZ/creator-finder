@@ -312,15 +312,12 @@ const HTML = `<!DOCTYPE html>
 
     <div class="panel">
       <div class="seclabel" style="margin-top:0">Filters</div>
-      <div class="controls" style="border-top:none;margin-top:0;padding-top:0">
+      <div class="controls" style="border-top:none;margin-top:0;padding-top:0;justify-content:center">
         <div class="ctl"><span>Min subs</span><input id="minsubs" value="5000"></div>
         <div class="ctl"><span>Max subs</span><input id="maxsubs" value="500000"></div>
         <input type="hidden" id="top" value="400">
         <input type="hidden" id="deep" checked>
-        <label class="ctl switch" title="Only show channels where we found an email"><input type="checkbox" id="emailonly" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">Has email</span></label>
         <input type="hidden" id="devonly" value="on">
-        <label class="ctl switch" title="Rewrite notes with AI (needs GEMINI_API_KEY)"><input type="checkbox" id="ainotes" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">Notes</span></label>
-        <label class="ctl switch" title="Quota-free search via yt-dlp. Local testing only — not for the deployed app."><input type="checkbox" id="dlp" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">yt-dlp</span></label>
         <div class="ctl" style="position:relative"><span>Language</span>
           <input type="hidden" id="langfilter" value="English">
           <div class="dd-btn" id="langbtn" style="cursor:pointer;display:flex;align-items:center;gap:6px">English <span style="font-size:9px;color:var(--dim)">▾</span></div>
@@ -629,8 +626,8 @@ $('go').onclick = async () => {
     similar: [...simMap.keys()].join(','), tags: [...tagSet].join(','),
     minsubs: +$('minsubs').value || 0, maxsubs: +$('maxsubs').value || null,
     top: +$('top').value || 30, deep: true, hidedev: true,
-    emailonly: $('emailonly').checked,
-    lang: $('langfilter').value, ainotes: $('ainotes').checked, dlp: $('dlp').checked,
+    emailonly: true,
+    lang: $('langfilter').value, ainotes: true, dlp: true,
   };
   const res = await fetch('/api/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await res.json();

@@ -166,7 +166,7 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
       );
     })
   );
-  similar = [...similar, ...extras.values()].slice(0, 24);
+  similar = similar.slice(0, 12);
   const dev = details.developers[0], pub = details.publishers[0];
   const [devGames, pubGames] = await Promise.all([
     fetchRelatedByCreator(dev, appid),
@@ -181,6 +181,7 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
         ? Math.round((spy.positive / (spy.positive + spy.negative)) * 100)
         : null,
     similarGames: similar,
+    expandedGames: [...extras.values()],
     relatedByDeveloper: devGames,
     relatedByPublisher: pubGames,
     headerImage: page.image,
