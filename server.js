@@ -64,7 +64,29 @@ const HTML = `<!DOCTYPE html>
   :root{--bg:#0b0e14;--panel:#121722;--panel2:#18202f;--line:#232c3d;--txt:#e8ecf4;--dim:#8a94a8;--acc:#5b8cff;--acc2:#7c5bff;--good:#3ddc84;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box}
   body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(1200px 600px at 70% -10%,#1a2340 0%,var(--bg) 55%);color:var(--txt);min-height:100vh}
-  .wrap{max-width:1200px;margin:0 auto;padding:36px 20px}
+  .shell{display:flex;min-height:100vh}
+  #nav{width:230px;flex-shrink:0;border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg2)}
+  .navlogo{font-size:15px;letter-spacing:1px;margin-bottom:24px}
+  .navsec{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;padding:0 6px}
+  .navitem{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:2px;position:relative}
+  .navitem:hover{background:var(--bg3)}
+  .navitem.on{background:var(--bg3);color:var(--txt)}
+  .navitem .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .navitem .g{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .navdots{color:var(--dim);padding:0 4px;font-size:14px;visibility:hidden}
+  .navitem:hover .navdots{visibility:visible}
+  .navmenu{display:none;position:absolute;right:8px;top:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;z-index:60;min-width:110px;box-shadow:0 10px 28px rgba(0,0,0,.5)}
+  .navmenu.open{display:block}
+  .navmenu .mi{padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--txt)}
+  .navmenu .mi:hover{background:var(--bg3)}
+  .navmenu .mi.danger{color:var(--bad)}
+  .navadd{width:100%;margin-top:8px;padding:7px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--dim);font-size:12px;cursor:pointer}
+  .navadd:hover{color:var(--txt);border-color:var(--dim)}
+  .navguest{margin-top:auto;padding:12px 8px;border-top:1px solid var(--line)}
+  .navacct{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+  .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
+  .navacct.ghost:hover{border-color:var(--dim)}
+  .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
@@ -184,6 +206,24 @@ const HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<div class="shell">
+<aside id="nav">
+  <div class="navlogo"><b>CREATOR</b>FINDER</div>
+  <div class="navsec">LISTS</div>
+  <div id="navlists"></div>
+  <button class="navadd" data-act="newlist">+ New list</button>
+  <div id="newlistbox" style="display:none;margin-top:8px">
+    <input id="navlistname" placeholder="List name…" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;outline:none">
+  </div>
+  <div class="navguest">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="width:30px;height:30px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--dim)">G</div>
+      <div><div style="font-size:13px;font-weight:600">Guest</div><div class="meta" style="font-size:10.5px">lists saved locally</div></div>
+    </div>
+    <button class="navacct" data-act="acct">Create account</button>
+    <button class="navacct ghost" data-act="acct">Log in</button>
+  </div>
+</aside>
 <div class="wrap">
   <div class="logo"><b>CREATOR</b>FINDER</div>
   <h1>Find creators for your game</h1>
@@ -256,6 +296,7 @@ const HTML = `<!DOCTYPE html>
     <a href="/terms" style="color:var(--dim)">Terms of Service</a>
     <span style="color:var(--dim)">Powered by the <b style="color:#f00">YouTube</b> Data API</span>
   </footer>
+</div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -536,6 +577,13 @@ $('go').onclick = async () => {
   // Populate language options from what was actually detected.
   renderTable(j.results);
   lastGame = j.game;
+  // Auto-create "{game} General" if this game has no list yet.
+  if (!Object.values(lists).some((l) => l.game === j.game)) {
+    const n = j.game + ' General';
+    lists[n] = { game: j.game, verdicts: {}, channels: {} };
+    if (!activeList) activeList = n;
+    saveLists();
+  }
   renderLists();
   if (j.notesId) pollNotes(j.notesId);
 };
@@ -575,23 +623,31 @@ function chanLine(r) {
     + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language) + '</div></div>';
 }
 
+let renaming = null, openMenu = null;
+function renderNav() {
+  const names = Object.keys(lists).sort((a, b) => (lists[a].game + a).localeCompare(lists[b].game + b));
+  $('navlists').innerHTML = names.map((n) => {
+    if (n === renaming)
+      return '<div class="navitem on"><input id="navrename" value="' + esc(n) + '" style="flex:1;min-width:0;background:var(--bg3);border:1px solid var(--acc);border-radius:6px;color:var(--txt);padding:4px 8px;font-size:13px;outline:none"></div>';
+    const l = lists[n];
+    const cnt = Object.keys(l.verdicts).length;
+    return '<div class="navitem' + (n === activeList ? ' on' : '') + '" data-act="openlist" data-n="' + esc(n) + '">'
+      + '<div class="nm"><div>' + esc(n) + '</div><div class="g">' + esc(l.game || '') + (cnt ? ' · ' + cnt : '') + '</div></div>'
+      + '<span class="navdots" data-act="itemmenu" data-n="' + esc(n) + '">⋮</span>'
+      + '<div class="navmenu' + (openMenu === n ? ' open' : '') + '">'
+      + '<div class="mi" data-act="rename" data-n="' + esc(n) + '">Rename</div>'
+      + '<div class="mi danger" data-act="deletelist" data-n="' + esc(n) + '">Delete</div></div></div>';
+  }).join('') || '<div class="meta" style="padding:6px;font-size:11.5px">No lists yet</div>';
+}
+
 function renderLists() {
   const el = $('lists');
-  if (!lastResults.length && !Object.keys(lists).length) { el.innerHTML = ''; return; }
-  const gameLists = Object.keys(lists).filter((n) => lists[n].game === lastGame);
-  const allLists = Object.keys(lists);
+  if (!lastResults.length && !Object.keys(lists).length) { el.innerHTML = ''; renderNav(); return; }
+  renderNav();
 
-  // --- no active list: picker ---
-  if (!activeList) {
-    el.innerHTML = '<div class="panel" style="margin-top:16px"><div class="seclabel" style="margin-top:0">Lists</div>'
-      + '<div class="listbar">'
-      + (allLists.length ? '<select id="lpick"><option value="">— pick a list —</option>' + allLists.map((n) => '<option>' + esc(n) + '</option>').join('') + '</select>' : '')
-      + '<input id="newlist" placeholder="New list name (e.g. Playtest outreach)">'
-      + '<button class="btn" data-act="startlist">Start reviewing</button>'
-      + '<span class="meta" style="font-size:11px">verdicts are saved per list — guest mode, stored in your browser</span>'
-      + '</div></div>';
-    return;
-  }
+  renderNav();
+  // --- no active list: nav drives selection; panel hidden ---
+  if (!activeList) { el.innerHTML = ''; return; }
 
   const l = lists[activeList];
   const acc = Object.entries(l.verdicts).filter(([, v]) => v === 'a').map(([c]) => c);
@@ -659,6 +715,53 @@ document.addEventListener('click', (e) => {
     triageMode = triageMode === 'detailed' ? 'compact' : 'detailed'; renderLists();
   } else if (act === 'closelist') {
     activeList = null; renderLists();
+  } else if (act === 'openlist') {
+    activeList = b.dataset.n; triageTab = 'queue'; qi = 0; openMenu = null; renderLists();
+  } else if (act === 'itemmenu') {
+    e.stopPropagation();
+    openMenu = openMenu === b.dataset.n ? null : b.dataset.n; renderNav();
+  } else if (act === 'rename') {
+    openMenu = null; renaming = b.dataset.n; renderNav();
+    setTimeout(() => $('navrename')?.focus(), 0);
+  } else if (act === 'deletelist') {
+    openMenu = null;
+    if (confirm('Delete list "' + b.dataset.n + '"? Verdicts will be lost.')) {
+      delete lists[b.dataset.n];
+      if (activeList === b.dataset.n) activeList = null;
+      saveLists(); renderLists();
+    }
+  } else if (act === 'newlist') {
+    const box = $('newlistbox');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    if (box.style.display === 'block') $('navlistname').focus();
+  } else if (act === 'acct') {
+    alert('Accounts coming soon — your lists are safely stored in this browser for now.');
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'navlistname') {
+    const name = e.target.value.trim();
+    if (!name) return;
+    if (!lists[name]) lists[name] = { game: lastGame || 'General', verdicts: {}, channels: {} };
+    activeList = name; e.target.value = ''; $('newlistbox').style.display = 'none';
+    saveLists(); renderLists();
+  } else if (e.target.id === 'navrename') {
+    const old = renaming, name = e.target.value.trim();
+    renaming = null;
+    if (name && name !== old && !lists[name]) {
+      lists[name] = lists[old]; delete lists[old];
+      if (activeList === old) activeList = name;
+      saveLists();
+    }
+    renderLists();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.navitem') && !e.target.closest('.navmenu')) {
+    if (openMenu) { openMenu = null; renderNav(); }
   }
 });
 
