@@ -135,6 +135,7 @@ export async function findCreators(input, yt, {
       url: `https://youtube.com/channel/${c.channelId}`,
       subs: c.subs,
       medianViews: c.medViews,
+      daysSince: c.daysSince,
       relevantVideos: c.vids.length,
       games: c.games,
       emails,

@@ -319,6 +319,11 @@ const HTML = `<!DOCTYPE html>
           <div class="dd-btn" id="langbtn" style="cursor:pointer;display:flex;align-items:center;gap:6px">English <span style="font-size:9px;color:var(--dim)">▾</span></div>
           <div class="dd-menu" id="langmenu"></div>
         </div>
+        <div class="ctl" style="position:relative"><span>Last post</span>
+          <input type="hidden" id="postfilter" value="any">
+          <div class="dd-btn" id="postbtn" style="cursor:pointer;display:flex;align-items:center;gap:6px">Anytime <span style="font-size:9px;color:var(--dim)">▾</span></div>
+          <div class="dd-menu" id="postmenu"></div>
+        </div>
       </div>
       <div style="display:flex;justify-content:center;margin-top:14px">
         <button class="btn" id="go" style="padding:11px 34px;font-size:14px">Find creators</button>
@@ -595,7 +600,21 @@ $('langmenu').addEventListener('click', (e) => {
   $('langbtn').childNodes[0].textContent = o.dataset.l === 'any' ? 'Any' : o.dataset.l;
   $('langmenu').classList.remove('open');
 });
-document.addEventListener('click', () => $('langmenu').classList.remove('open'));
+document.addEventListener('click', () => { $('langmenu').classList.remove('open'); $('postmenu').classList.remove('open'); });
+
+const POST_OPTS = [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['90', 'Last 3 months'], ['180', 'Last 6 months'], ['365', 'Last year'], ['any', 'Anytime']];
+$('postbtn').onclick = (e) => {
+  e.stopPropagation();
+  const cur = $('postfilter').value;
+  $('postmenu').innerHTML = POST_OPTS.map(([v, l]) => '<div class="opt' + (v === cur ? ' sel' : '') + '" data-v="' + v + '">' + l + '</div>').join('');
+  $('postmenu').classList.toggle('open');
+};
+$('postmenu').addEventListener('click', (e) => {
+  const o = e.target.closest('.opt'); if (!o) return;
+  $('postfilter').value = o.dataset.v;
+  $('postbtn').childNodes[0].textContent = o.textContent;
+  $('postmenu').classList.remove('open');
+});
 
 
 function renderTable(results) {
@@ -642,33 +661,48 @@ $('go').onclick = async () => {
   $('lists').innerHTML = '<div class="panel"><div class="scanload"><div class="spinner" style="width:38px;height:38px;border-width:4px"></div>'
     + '<div style="font-size:16px;font-weight:700;margin-top:16px">Finding creators…</div>'
     + '<div class="meta" style="margin-top:6px">Searching YouTube for channels covering these games — usually 30–60s on a cold run.</div></div></div>';
-  const body = {
+  const baseBody = {
     input: $('link').value,
-    similar: [...simMap.keys()].join(','), tags: derivedTags().join(','),
+    tags: derivedTags().join(','),
     minsubs: +$('minsubs').value.replace(/[^\\d]/g, '') || 0, maxsubs: +$('maxsubs').value.replace(/[^\\d]/g, '') || null,
-    top: +$('top').value || 30, deep: true, hidedev: true,
+    top: +$('top').value || 400, deep: true, hidedev: true,
     emailonly: true,
-    lang: $('langfilter').value, ainotes: true, dlp: true,
+    lang: $('langfilter').value, lastpost: $('postfilter').value, ainotes: true, dlp: true, expand: true,
   };
-  const res = await fetch('/api/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const j = await res.json();
-  $('go').disabled = false;
-  if (!res.ok) { $('lists').innerHTML = '<div class="panel"><div class="scanload" style="color:var(--rej)">Error: ' + esc(j.error || 'scan failed') + '</div></div>'; return; }
-  $('status').textContent = '';
-  // Populate language options from what was actually detected.
-  lastResults = j.results;
-  lastGame = j.game;
+  // Progressive scan: the base games are searched in small sequential chunks,
+  // each merged into the pool as it lands — first creators appear in seconds
+  // instead of one long wait.
+  const simNames = [...simMap.keys()];
   lastInput = $('link').value;
   expandDone = false; expandBuffer = [];
-  usedGameNames = new Set([j.game, ...simMap.keys()].map((n) => n.toLowerCase()));
-  // Refresh this game's candidate pool (lists are never auto-created).
-  pools[j.game] = {};
-  for (const r of j.results) pools[j.game][r.channelId] = snap(r);
-  savePools();
-  // Lists aren't game-tied — the selected list stays, verdicts apply to it.
-  triageTab = 'queue';
-  renderLists();
-  requestNotes(j.results.map((r) => pools[j.game] && pools[j.game][r.channelId]).filter(Boolean));
+  let first = true;
+  for (let i = 0; i < simNames.length; i += 3) {
+    const res = await fetch('/api/find', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseBody, similar: simNames.slice(i, i + 3).join(',') }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.results) {
+      if (first) { $('lists').innerHTML = '<div class="panel"><div class="scanload" style="color:var(--rej)">Error: ' + esc(j.error || 'scan failed') + '</div></div>'; $('go').disabled = false; return; }
+      continue;
+    }
+    if (first) {
+      first = false;
+      lastGame = j.game;
+      usedGameNames = new Set([j.game, ...simNames].map((n) => n.toLowerCase()));
+      pools[j.game] = {};
+      for (const [n, a] of Object.entries(j.appids || {})) gameAppids[n.toLowerCase()] = a;
+    }
+    const pool = pools[j.game];
+    for (const r of j.results) if (!pool[r.channelId]) pool[r.channelId] = snap(r);
+    lastResults = j.results;
+    savePools();
+    triageTab = 'queue';
+    renderLists();
+    requestNotes(j.results.map((r) => pool[r.channelId]).filter(Boolean));
+  }
+  $('go').disabled = false;
+  if (first) { $('lists').innerHTML = '<div class="panel"><div class="scanload" style="color:var(--rej)">Scan returned nothing — check the link and try again.</div></div>'; return; }
   maybeExpand();
 };
 
@@ -727,7 +761,7 @@ async function fetchRound() {
       minsubs: +$('minsubs').value.replace(/[^\\d]/g, '') || 0,
       maxsubs: +$('maxsubs').value.replace(/[^\\d]/g, '') || null,
       top: 400, deep: true, hidedev: true, emailonly: true,
-      lang: $('langfilter').value, ainotes: true, dlp: true,
+      lang: $('langfilter').value, lastpost: $('postfilter').value, ainotes: true, dlp: true,
     }),
   });
   const j = await res.json().catch(() => ({}));
@@ -761,7 +795,7 @@ const snap = (r) => ({
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
   vidTitles: r.vidTitles || [], description: r.description || '',
-  aiNote: r.aiNote || null,
+  aiNote: r.aiNote || null, daysSince: r.daysSince ?? null,
 });
 const poolFor = (game) => pools[game] || {};
 const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
@@ -790,6 +824,12 @@ function updTabs() {
 }
 
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+function fmtAge(d) {
+  if (d == null) return '—';
+  if (d < 30) return d + 'd ago';
+  if (d < 365) return Math.round(d / 30) + 'mo ago';
+  return (d / 365).toFixed(1) + 'y ago';
+}
 
 function chanLine(r) {
   const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
@@ -812,7 +852,8 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
     + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
     + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
-    + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
+    + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div>'
+    + '<div class="qstat"><div class="qs-l">Last post</div><div class="qs-v">' + fmtAge(r.daysSince) + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
     + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · ') || '—')) + '</div>'
@@ -1160,7 +1201,8 @@ export const handler = async (req, res) => {
       let results = ranked.filter((r) =>
         (!b.emailonly || r.emails.length) &&
         (!b.hidedev || r.niche !== 'Dev/studio') &&
-        (!b.lang || b.lang === 'any' || (r.language || 'English') === b.lang)
+        (!b.lang || b.lang === 'any' || (r.language || 'English') === b.lang) &&
+        (b.lastpost === 'any' || !b.lastpost || (r.daysSince != null && r.daysSince <= +b.lastpost))
       );
       results = results.slice(0, b.expand ? (b.top || 400) : 20);
       return json(200, {
