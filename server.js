@@ -313,8 +313,8 @@ const HTML = `<!DOCTYPE html>
     <div class="panel">
       <div class="seclabel" style="margin-top:0">Filters</div>
       <div class="controls" style="border-top:none;margin-top:0;padding-top:0;justify-content:center">
-        <div class="ctl"><span>Min subs</span><input id="minsubs" value="5000"></div>
-        <div class="ctl"><span>Max subs</span><input id="maxsubs" value="500000"></div>
+        <div class="ctl"><span>Min subs</span><input id="minsubs" value="1,000"></div>
+        <div class="ctl"><span>Max subs</span><input id="maxsubs" value="5,000,000"></div>
         <input type="hidden" id="top" value="400">
         <input type="hidden" id="deep" checked>
         <input type="hidden" id="devonly" value="on">
@@ -624,7 +624,7 @@ $('go').onclick = async () => {
   const body = {
     input: $('link').value,
     similar: [...simMap.keys()].join(','), tags: [...tagSet].join(','),
-    minsubs: +$('minsubs').value || 0, maxsubs: +$('maxsubs').value || null,
+    minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0, maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
     top: +$('top').value || 30, deep: true, hidedev: true,
     emailonly: true,
     lang: $('langfilter').value, ainotes: true, dlp: true,
@@ -944,6 +944,12 @@ document.addEventListener('click', (e) => {
   } else if (act === 'acct') {
     alert('Accounts coming soon — your lists are safely stored in this browser for now.');
   }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
+  const n = e.target.value.replace(/[^\d]/g, '');
+  e.target.value = n ? Number(n).toLocaleString('en-US') : '';
 });
 
 document.addEventListener('keydown', (e) => {
