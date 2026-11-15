@@ -108,12 +108,13 @@ const HTML = `<!DOCTYPE html>
   .seclabel{margin:18px 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);display:flex;align-items:center;gap:10px}
   .seclabel::after{content:'';flex:1;height:1px;background:var(--line)}
   /* --- similar-game cards --- */
-  .gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .gamegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
   .gcard{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--panel2);transition:.15s}
   .gcard:hover{border-color:#3a527a;transform:translateY(-2px)}
   .gcard img{width:100%;object-fit:cover;display:block;background:var(--line)}
   .gcard .gname{padding:7px 10px 3px;font-size:12.5px;font-weight:600;line-height:1.3;min-height:32px}
-  .gcard .gtags{padding:0 10px 8px;font-size:10px;color:var(--dim);line-height:1.4;min-height:14px}
+  .gcard .gtags{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px;min-height:22px}
+  .tag.sm{font-size:9.5px;padding:2px 7px}
   .gcard .x{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);color:var(--bad);display:none;align-items:center;justify-content:center;cursor:pointer;font-size:14px;line-height:1}
   .gcard:hover .x{display:flex}
   .addcard{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:10px;color:var(--dim);cursor:pointer;font-size:13px;min-height:100px;transition:.15s}
@@ -122,7 +123,7 @@ const HTML = `<!DOCTYPE html>
   .searchcard input{width:100%;background:transparent;border:none;color:var(--txt);font-size:13px;outline:none}
   /* --- game search results: same card grid --- */
   .dd.gdd{position:static;border:none;background:transparent;box-shadow:none;width:100%;max-height:none;padding:0;margin-top:12px}
-  .dd.gdd .gddgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .dd.gdd .gddgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
   .dd.gdd .gitem{display:block;position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--panel2);cursor:pointer;transition:.15s;padding:0}
   .dd.gdd .gitem:hover{border-color:var(--acc);transform:translateY(-2px);box-shadow:0 6px 18px rgba(91,140,255,.15)}
   .dd.gdd .gitem img{width:100%;object-fit:cover;display:block;background:var(--line)}
@@ -303,10 +304,7 @@ const HTML = `<!DOCTYPE html>
       <div class="dd gdd" id="simdd" style="display:none;position:static;margin-top:10px"></div>
     </div>
 
-    <div class="panel">
-      <div class="seclabel" style="margin-top:0">Tag profile — derived from the games above; edit the games to change it</div>
-      <div class="tagbox" id="tagbox" style="cursor:default"></div>
-    </div>
+
 
     <div class="panel">
       <div class="seclabel" style="margin-top:0">Filters</div>
@@ -363,14 +361,11 @@ const derivedTags = () => {
   for (const [, v] of simMap) (v?.tags || []).forEach((t) => s.add(t));
   return [...s];
 };
-function renderTags() {
-  $('tagbox').innerHTML = derivedTags().slice(0, 30).map((t) => '<span class="tag">' + t + '</span>').join('');
-}
 
 function renderChips() {
   const el = $('simchips');
   el.querySelectorAll('.gcard').forEach(c => c.remove());
-  $('addcardbtn').style.display = simMap.size >= 12 ? 'none' : '';
+  $('addcardbtn').style.display = simMap.size >= 10 ? 'none' : '';
   for (const [name, v] of simMap) {
     const d = document.createElement('div');
     d.className = 'gcard';
@@ -378,13 +373,13 @@ function renderChips() {
     if (src) {
       const im = document.createElement('img');
       im.src = src;
+      im.style.cssText = 'width:100%;display:block;aspect-ratio:231/87;object-fit:cover';
       im.onerror = () => im.remove();
-      im.onload = () => { im.style.aspectRatio = im.naturalWidth + '/' + im.naturalHeight; };
       d.appendChild(im);
     }
     d.insertAdjacentHTML('beforeend', '<div class="gname">' + name + '</div>'
-      + '<div class="gtags">' + (v?.tags || []).slice(0, 3).join(' · ') + '</div><span class="x">&times;</span>');
-    d.querySelector('.x').onclick = (e) => { e.stopPropagation(); simMap.delete(name); renderChips(); renderTags(); };
+      + '<div class="gtags">' + (v?.tags || []).slice(0, 3).map((t) => '<span class="tag sm">' + t + '</span>').join('') + '</div><span class="x">&times;</span>');
+    d.querySelector('.x').onclick = (e) => { e.stopPropagation(); simMap.delete(name); renderChips(); };
     el.insertBefore(d, $('addcardbtn'));
   }
 }
@@ -417,15 +412,15 @@ $('addcardbtn').onclick = () => {
         lbl.textContent = it.name;
         d.append(img, lbl);
         d.onclick = () => {
-          if (simMap.size >= 12) { dd.style.display = 'none'; resetAddCard(); return; }
+          if (simMap.size >= 10) { dd.style.display = 'none'; resetAddCard(); return; }
           simMap.set(it.name, { appid: it.appid, img: it.img, tags: [] });
-          renderChips(); renderTags();
+          renderChips()
           dd.style.display = 'none'; resetAddCard();
           // Fill in the new base game's own defining tags in the background.
           fetch('/api/fingerprint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: it.appid }) })
             .then((r) => r.json()).then((j) => {
               const v = simMap.get(it.name);
-              if (v) { v.tags = (j.tags || []).slice(0, 4); renderChips(); renderTags(); }
+              if (v) { v.tags = (j.tags || []).slice(0, 4); renderChips() }
             }).catch(() => {});
         };
         grid.appendChild(d);
@@ -529,7 +524,7 @@ $('load').onclick = async () => {
   simMap.clear();
   fpTags = (j.tags || []).slice(0, 20);
   j.similarGames.forEach(g => simMap.set(g.name, String(g.appid).startsWith('manual') ? null : { appid: g.appid, img: g.img || null, tags: g.topTags || [] }));
-  renderChips(); renderTags();
+  renderChips()
 };
 
 function renderRelated(elId, creator, games) {
@@ -552,11 +547,8 @@ function renderRelated(elId, creator, games) {
     im.onerror = () => im.remove();
     const s = document.createElement('span');
     s.textContent = g.name;
-    s.style.cssText = 'display:block;padding:5px 8px 2px;font-size:11px;font-weight:600;line-height:1.25';
-    const tg = document.createElement('div');
-    tg.textContent = (g.topTags || []).slice(0, 3).join(' · ');
-    tg.style.cssText = 'padding:0 8px 6px;font-size:9.5px;color:var(--dim);line-height:1.4;min-height:13px';
-    c.append(im, s, tg);
+    s.style.cssText = 'display:block;padding:5px 8px;font-size:11px;font-weight:600;line-height:1.25';
+    c.append(im, s);
     c.onmouseenter = () => c.style.borderColor = 'var(--acc)';
     c.onmouseleave = () => c.style.borderColor = 'var(--line)';
     c.onclick = () => {
@@ -655,7 +647,7 @@ $('go').onclick = async () => {
   lastResults = j.results;
   lastGame = j.game;
   lastInput = $('link').value;
-  expandDone = false;
+  expandDone = false; expandBuffer = [];
   usedGameNames = new Set([j.game, ...simMap.keys()].map((n) => n.toLowerCase()));
   // Refresh this game's candidate pool (lists are never auto-created).
   pools[j.game] = {};
@@ -668,10 +660,9 @@ $('go').onclick = async () => {
   maybeExpand();
 };
 
-// Rolling expansion: whenever the unreviewed queue drops below 20, pull the
-// next frontier round — each of the 12 base games contributes its best unused
-// >=3-tag neighbor — scan those games, merge candidates, repeat until either
-// the queue is back to 20 or the frontier runs dry.
+// Rolling expansion: whenever the unreviewed queue drops below 20, top it up
+// 10 candidates at a time. A background scan fills a buffer first — most
+// top-ups then drain the buffer instantly with no network at all.
 async function maybeExpand() {
   if (expanding || !lastGame || expandDone) return;
   const pool = poolFor(lastGame);
@@ -679,6 +670,13 @@ async function maybeExpand() {
   if (left >= 20) return;
   expanding = true;
   try {
+    // Drain the buffer first — instant, no network.
+    if (expandBuffer.length) {
+      for (const r of expandBuffer.splice(0, 10)) if (!pool[r.channelId]) pool[r.channelId] = r;
+      savePools(); updTabs();
+      expanding = false; maybeExpand(); return;
+    }
+    // Buffer empty — fetch the next frontier round (up to one pick per base game).
     const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
     const er = await fetch('/api/expand-games', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -701,8 +699,9 @@ async function maybeExpand() {
     });
     const j = await res.json();
     if (res.ok && j.results) {
-      const pool = (pools[j.game] ||= {});
-      for (const r of j.results) if (!pool[r.channelId]) pool[r.channelId] = snap(r);
+      const fresh = j.results.map(snap).filter((r) => !pool[r.channelId]);
+      expandBuffer = fresh;
+      for (const r of expandBuffer.splice(0, 10)) pool[r.channelId] = r;
       savePools();
       if (j.notesId) pollNotes(j.notesId);
       updTabs();
@@ -725,7 +724,7 @@ for (const [n, l] of Object.entries(lists)) {
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
-let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false;
+let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,

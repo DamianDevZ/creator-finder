@@ -190,13 +190,13 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
   if (!tags.length) tags = details.genres;
   // Similarity priority: Steam's own More-Like-This > tag overlap
   let similar = await fetchMoreLikeThis(appid);
-  if (similar.length < 12) {
+  if (similar.length < 10) {
     // Top up to 12 with tag-overlap neighbors so the panel is always full.
-    const tagSims = await fetchSimilarGames(appid, tags, 12);
+    const tagSims = await fetchSimilarGames(appid, tags, 10);
     const seen = new Set(similar.map((g) => String(g.appid)));
     similar = [...similar, ...tagSims.filter((g) => !seen.has(String(g.appid)))];
   }
-  similar = similar.slice(0, 12);
+  similar = similar.slice(0, 10);
   // Each base game's defining tags — shown on its card and used by expansion.
   await Promise.all(similar.map(async (g) => { g.topTags = await topTagsFor(g.appid); }));
   const dev = details.developers[0], pub = details.publishers[0];
