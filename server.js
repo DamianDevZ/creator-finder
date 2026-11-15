@@ -376,13 +376,13 @@ function renderChips() {
   for (const [name, v] of simMap) {
     const d = document.createElement('div');
     d.className = 'gcard';
-    const src = (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/header.jpg' : null) || v?.img;
+    const src = v?.img || (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/header.jpg' : null);
     if (src) {
       const im = document.createElement('img');
       const tries = [
+        v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/header.jpg' : null,
         v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_616x353.jpg' : null,
         v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_231x87.jpg' : null,
-        v?.img,
       ].filter(Boolean);
       im.src = src;
       im.style.cssText = 'width:100%;display:block';
@@ -569,16 +569,16 @@ function renderRelated(elId, creator, games) {
   h.textContent = 'More by ' + creator + ' — click to analyze:';
   const grid = document.createElement('div');
   grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px';
-  for (const g of games.slice(0, 9)) {
+  for (const g of games.slice(0, 10)) {
     const c = document.createElement('div');
     c.style.cssText = 'border-radius:8px;overflow:hidden;border:1px solid var(--line);cursor:pointer;transition:.15s;background:var(--panel2)';
     const im = document.createElement('img');
-    im.src = 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg';
+    im.src = g.img || 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg';
     im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
     const tries = [
+      'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg',
       'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/capsule_616x353.jpg',
       'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/capsule_231x87.jpg',
-      g.img,
     ].filter(Boolean);
     im.onerror = () => { const n = tries.shift(); if (n) im.src = n; else im.remove(); };
     const s = document.createElement('span');

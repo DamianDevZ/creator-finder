@@ -182,6 +182,29 @@ async function fetchRelatedByCreator(name, excludeAppid) {
     .slice(0, 10);
 }
 
+// Real capsule art: the generic /apps/<id>/header.jpg shortcut 404s for tiny
+// games — their art lives at a hashed store_item_assets path only appdetails
+// knows. Batched: appdetails accepts comma-separated appids.
+async function fetchHeaderImages(appids) {
+  const out = new Map();
+  const ids = [...new Set(appids.map(String).filter(Boolean))];
+  await Promise.all(
+    [...Array(Math.ceil(ids.length / 30))].map(async (_, i) => {
+      const chunk = ids.slice(i * 30, i * 30 + 30);
+      try {
+        const res = await fetch(`https://store.steampowered.com/api/appdetails?appids=${chunk.join(',')}&filters=basic`);
+        if (!res.ok) return;
+        const j = await res.json();
+        for (const id of chunk) {
+          const img = j[id]?.data?.header_image;
+          if (img) out.set(id, img);
+        }
+      } catch {}
+    })
+  );
+  return out;
+}
+
 export async function buildFingerprint(input, { manualTags = [] } = {}) {
   const appid = parseAppId(input);
   if (!appid) throw new Error(`Could not parse a Steam appid from: ${input}`);
@@ -207,6 +230,13 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
     pub && pub !== dev ? fetchRelatedByCreator(pub, appid) : [],
   ]);
   await Promise.all([...devGames, ...pubGames].map(async (g) => { g.topTags = await topTagsFor(g.appid); }));
+  // Resolve real header_image URLs for every card — MLT/search logos go stale.
+  const all = [...similar, ...devGames, ...pubGames];
+  const imgs = await fetchHeaderImages(all.map((g) => g.appid));
+  for (const g of all) {
+    const img = imgs.get(String(g.appid));
+    if (img) g.img = img;
+  }
   return {
     ...details,
     tags,
