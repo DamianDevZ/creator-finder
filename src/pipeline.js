@@ -3,7 +3,12 @@
 
 import { buildFingerprint } from './steam.js';
 import { scoreChannel, medianViews, daysSince } from './scoring.js';
-import { searchDlp } from './dlp.js';
+
+// yt-dlp is a local-only test provider (gitignored, not in the audited repo).
+let searchDlp = null;
+try {
+  ({ searchDlp } = await import('./dlp.js'));
+} catch {}
 import { extractContacts, extractAlias, classifyChannel } from './contacts.js';
 
 const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -31,7 +36,7 @@ export async function findCreators(input, yt, {
   const hits = new Map();
   for (const q of queries) {
     const gameName = names.find((n) => q.toLowerCase().includes(n.toLowerCase())) || q;
-    const results = dlp ? await searchDlp(q, 50 * pages) : await yt.searchVideos(q, 50, pages);
+    const results = dlp && searchDlp ? await searchDlp(q, 50 * pages) : await yt.searchVideos(q, 50, pages);
     for (const r of results) {
       const h = hits.get(r.channelId) || { channelTitle: r.channelTitle, videos: new Map(), games: new Set() };
       h.videos.set(r.videoId, { title: r.title, publishedAt: r.publishedAt, query: q });
