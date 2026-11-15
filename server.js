@@ -686,6 +686,23 @@ function detailCard(r, btns) {
     + '</div></div></div>';
 }
 
+function qTable(rows, lastW, btns) {
+  return '<table class="qt">'
+    + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
+    + rows.map((r) => {
+      const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+      const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
+      return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
+        + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
+        + '<td class="num">' + fmt(r.subs) + '</td>'
+        + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
+        + '<td><div class="qnotes">'
+        + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
+        + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
+        + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
+    }).join('') + '</table>';
+}
+
 let renaming = null, openMenu = null;
 function renderNav() {
   const names = Object.keys(lists).sort((a, b) => (lists[a].game + a).localeCompare(lists[b].game + b));
@@ -739,21 +756,9 @@ function renderLists() {
         + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>')).join('');
     } else {
       // compact: mini-table — score, channel, subs, language, notes, email, verdict
-      body += '<table class="qt">'
-        + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:100px"></th></tr>'
-        + shown.map((r) => {
-          const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
-          const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
-          return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
-            + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
-            + '<td class="num">' + fmt(r.subs) + '</td>'
-            + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
-            + '<td><div class="qnotes">'
-            + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
-            + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
-            + '<td><div class="vbtns"><button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
-            + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button></div></td></tr>';
-        }).join('') + '</table>';
+      body += qTable(shown, 100, (r) =>
+        '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
+        + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>');
     }
   } else {
     const ids = triageTab === 'acc' ? acc : rej;
@@ -764,11 +769,7 @@ function renderLists() {
     body += rows.length
       ? (triageMode === 'detailed'
         ? rows.map((r) => detailCard(r, moveBtns(r))).join('')
-        : rows.map((r) =>
-          '<div class="qrow">' + chanLine(r)
-          + (triageTab === 'acc' && r.emails.length ? '<div>' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
-          + '<div class="vbtns">' + moveBtns(r) + '</div></div>'
-        ).join(''))
+        : qTable(rows, 190, moveBtns))
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
   el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
