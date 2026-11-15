@@ -597,7 +597,7 @@ let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, last
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
-  score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [],
+  score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
 });
 const queueFor = (l) => lastResults.filter((r) => !lists[l].verdicts[r.channelId]);
@@ -668,20 +668,38 @@ function renderLists() {
     if (!shown.length) {
       body += '<div class="meta" style="padding:24px;text-align:center">Queue empty — every candidate has a verdict. ' + acc.length + ' accepted, ' + rej.length + ' rejected.</div>';
     } else if (triageMode === 'detailed') {
-      body += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">' + shown.map((r) =>
-        '<div class="qcard"><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">' + chanLine(r) + '</div>'
-        + '<div class="meta" style="font-size:11px;margin-bottom:6px">Covers: ' + (r.games || []).map(esc).join(', ') + '</div>'
-        + '<div class="meta" style="font-size:11.5px;line-height:1.5;margin-bottom:10px">' + (r.notes || []).map(esc).join('<br>') + '</div>'
-        + (r.emails.length ? '<div style="margin-bottom:10px">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
-        + '<div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>'
-        + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button></div></div>'
-      ).join('') + '</div>';
+      body += shown.map((r) => {
+        const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+        const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
+        return '<div class="qcard" style="display:flex;gap:18px;align-items:flex-start;margin-bottom:10px">'
+          + '<div style="display:flex;align-items:center;gap:12px;min-width:240px">' + thumb + '<div style="min-width:0">'
+          + '<a href="' + r.url + '" target="_blank" style="font-weight:700;font-size:15px">' + esc(r.channel) + '</a>'
+          + '<div class="meta" style="font-size:11px">' + (r.alias ? esc(r.alias) + ' · ' : '') + fmt(r.subs) + ' subs</div></div></div>'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><span class="pill ' + cls + '">' + r.score + '</span>'
+          + '<span class="meta" style="font-size:11px">avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language) + '</span></div>'
+          + '<div class="meta" style="font-size:11px;margin-bottom:6px">Covers: ' + (r.games || []).map(esc).join(', ') + '</div>'
+          + '<div style="font-size:12px;line-height:1.55;color:var(--txt);opacity:.85">' + (r.notes || []).map(esc).join('<br>') + '</div>'
+          + (r.emails.length ? '<div style="margin-top:8px">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+          + '</div>'
+          + '<div class="vbtns" style="flex-direction:column;align-self:center"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>'
+          + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button></div></div>';
+      }).join('');
     } else {
-      body += shown.map((r) =>
-        '<div class="qrow">' + chanLine(r)
-        + '<div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>'
-        + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button></div></div>'
-      ).join('');
+      // compact: mini-table — score, channel, subs, language, notes, email, verdict
+      body += '<table><tr><th>Score</th><th>Channel</th><th>Subs</th><th>Language</th><th>Notes</th><th>Email</th><th></th></tr>'
+        + shown.map((r) => {
+          const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+          const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--panel2)">';
+          return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
+            + '<td><div class="chan">' + thumb + '<div><div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></div></td>'
+            + '<td class="num">' + fmt(r.subs) + '</td>'
+            + '<td><span class="meta" style="font-size:12px">' + esc(r.language) + '</span></td>'
+            + '<td class="meta" style="max-width:200px;font-size:11.5px;line-height:1.4">' + (r.notes || []).map(esc).join('<br>') + '</td>'
+            + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
+            + '<td style="white-space:nowrap"><div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>'
+            + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button></div></td></tr>';
+        }).join('') + '</table>';
     }
   } else {
     const ids = triageTab === 'acc' ? acc : rej;
