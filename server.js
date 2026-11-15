@@ -226,6 +226,12 @@ const HTML = `<!DOCTYPE html>
 
   <div id="status"></div>
   <div id="out"></div>
+
+  <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
+    <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
+    <a href="/terms" style="color:var(--dim)">Terms of Service</a>
+    <a href="https://github.com/DamianDevZ/creator-finder" style="color:var(--dim)">GitHub</a>
+  </footer>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -596,6 +602,13 @@ createServer(async (req, res) => {
         setTimeout(() => notesJobs.delete(notesId), 10 * 60 * 1000);
       }
       return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId });
+    }
+    if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
+      const md = readFileSync(url.pathname === '/privacy' ? 'PRIVACY.md' : 'TERMS.md', 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      return res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder</title>
+<style>body{background:#0b0e14;color:#c8d0e0;font:15px/1.7 system-ui;max-width:720px;margin:40px auto;padding:0 20px}h1{color:#fff}a{color:#7c8cf8}</style></head>
+<body><pre style="white-space:pre-wrap;font:inherit">${md}</pre><p><a href="/">← Back</a></p></body></html>`);
     }
     if (req.method === 'GET' && url.pathname === '/api/notes') {
       const job = notesJobs.get(url.searchParams.get('id'));
