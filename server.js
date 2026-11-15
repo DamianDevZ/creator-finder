@@ -528,7 +528,8 @@ $('load').onclick = async () => {
   }
   simMap.clear();
   fpTags = (j.tags || []).slice(0, 20);
-  j.similarGames.forEach(g => simMap.set(g.name, String(g.appid).startsWith('manual') ? null : { appid: g.appid, img: g.img || null, tags: g.topTags || [] }));
+  j.similarGames.forEach(g => { simMap.set(g.name, String(g.appid).startsWith('manual') ? null : { appid: g.appid, img: g.img || null, tags: g.topTags || [] }); gameAppids[g.name.toLowerCase()] = g.appid; });
+  gameAppids[j.name.toLowerCase()] = j.appid;
   renderChips()
 };
 
@@ -711,7 +712,7 @@ async function fetchRound() {
   const ej = await er.json().catch(() => ({}));
   if (!er.ok) return false;
   const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
-  batch.forEach((g) => usedGameNames.add(g.name.toLowerCase()));
+  batch.forEach((g) => { usedGameNames.add(g.name.toLowerCase()); gameAppids[g.name.toLowerCase()] = g.appid; });
   if (!batch.length) return false;
   const res = await fetch('/api/find', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -748,6 +749,7 @@ const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
 const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
+const gameAppids = {}; // lowercase game name -> steam appid, for Covers links
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -807,7 +809,7 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
-    + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="https://store.steampowered.com/search/?term=' + encodeURIComponent(g) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
+    + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
     + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
@@ -1166,7 +1168,10 @@ export const handler = async (req, res) => {
           });
         setTimeout(() => notesJobs.delete(notesId), 10 * 60 * 1000);
       }
-      return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId });
+      return json(200, {
+        game: fp.name, queries: queries.length, channelCount, results, notesId,
+        appids: { [fp.name]: fp.appid, ...Object.fromEntries(fp.similarGames.filter((g) => !String(g.appid).startsWith('manual')).map((g) => [g.name, g.appid])) },
+      });
     }
     if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
       const md = url.pathname === '/privacy' ? PRIVACY_MD : TERMS_MD;
