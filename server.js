@@ -577,13 +577,16 @@ $('go').onclick = async () => {
   // Populate language options from what was actually detected.
   lastResults = j.results;
   lastGame = j.game;
-  // Auto-create "{game} General" if this game has no list yet.
-  if (!Object.values(lists).some((l) => l.game === j.game)) {
-    const n = j.game + ' General';
-    lists[n] = { game: j.game, verdicts: {}, channels: {} };
-    if (!activeList) activeList = n;
+  // Auto-create "{game} General" if this game has no list yet,
+  // and auto-open the game's list so the queue shows immediately.
+  let gameList = Object.keys(lists).find((n) => lists[n].game === j.game);
+  if (!gameList) {
+    gameList = j.game + ' General';
+    lists[gameList] = { game: j.game, verdicts: {}, channels: {} };
     saveLists();
   }
+  if (!activeList) activeList = gameList;
+  triageTab = 'queue';
   renderLists();
   if (j.notesId) pollNotes(j.notesId);
 };
