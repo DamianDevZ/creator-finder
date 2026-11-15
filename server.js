@@ -1024,10 +1024,11 @@ document.addEventListener('click', (e) => {
   }
 });
 
-document.addEventListener('change', (e) => {
+document.addEventListener('input', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
   const n = e.target.value.replace(/[^\d]/g, '');
   e.target.value = n ? Number(n).toLocaleString('en-US') : '';
+  e.target.setSelectionRange(e.target.value.length, e.target.value.length);
 });
 
 document.addEventListener('keydown', (e) => {
