@@ -203,6 +203,7 @@ const HTML = `<!DOCTYPE html>
   .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
   .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
   .kchip.claimed{border-color:#d4a017;color:#e8c35a}.kchip.redeemed{border-color:var(--good);color:var(--good)}
+  .apick:hover{background:var(--panel2)}
   .lmbox input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none}
   .listbar select,.listbar input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none}
   .vbtns{display:flex;gap:6px}
@@ -1265,7 +1266,7 @@ document.addEventListener('click', (e) => {
 
 // ---- Email campaign -----------------------------------------------
 const SKEY = 'cf_sender';
-const DEF_TPL = "Hi {alias},\n\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\n\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\n\n{keys}\n\nHappy to answer any questions — thanks for your time!\n\nKind regards,\n{dev}";
+const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}";
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
 const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
 const freeKeys = (l) => (l.keys || []).filter((k) => k.st === 'free');
@@ -1282,7 +1283,7 @@ function fillTemplate(tpl, c, camp, keyText) {
   };
   return String(tpl || '').replace(/\{(name|alias|note|game|dev|keys)\}/g, (m) => map[m] ?? m);
 }
-const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => k.k).join('\n');
+const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => k.k).join('\\n');
 
 function readCampForm() {
   return { game: $('cgame').value.trim(), dev: $('cdev').value.trim(), email: $('cemail').value.trim(), subject: $('csubject').value.trim(), template: $('ctemplate').value };
@@ -1297,7 +1298,7 @@ function openCampaign() {
   $('cemail').value = c.email || s.email || '';
   $('csubject').value = c.subject || '';
   $('ctemplate').value = c.template || DEF_TPL;
-  $('ckeys').value = (l.keys || []).map((k) => k.k).join('\n');
+  $('ckeys').value = (l.keys || []).map((k) => k.k).join('\\n');
   $('cpreviews').innerHTML = '';
   updKeyCount();
   $('cmodal').style.display = 'flex';
@@ -1313,7 +1314,7 @@ function saveCampaign() {
   // Merge the keys textarea: keep status/assignment of known keys, add new,
   // drop removed ones only if still free.
   const seen = new Set();
-  const want = $('ckeys').value.split('\n').map((x) => x.trim()).filter(Boolean);
+  const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
   l.keys ||= [];
   const have = new Map(l.keys.map((k) => [k.k, k]));
   l.keys = want.filter((k) => !seen.has(k) && seen.add(k)).map((k) => have.get(k) || { k, st: 'free' });
@@ -1364,7 +1365,7 @@ $('aq').oninput = () => {
     try {
       const rs = await fetch('/api/channel-search?q=' + encodeURIComponent(q)).then((r) => r.json());
       $('ares').innerHTML = rs.length ? rs.map((c) =>
-        '<div data-act="apick" data-cid="' + c.channelId + '" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'var(--panel2)\'" onmouseout="this.style.background=\'\'">'
+        '<div class="apick" data-act="apick" data-cid="' + c.channelId + '" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer">'
         + '<img src="' + c.thumb + '" style="width:30px;height:30px;border-radius:50%">'
         + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.name) + '</div>'
         + '<div class="meta" style="font-size:11px">' + fmt(c.subs) + ' subs</div></div></div>').join('')
