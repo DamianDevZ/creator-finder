@@ -309,8 +309,8 @@ const HTML = `<!DOCTYPE html>
     <div class="panel">
       <div class="seclabel" style="margin-top:0">Filters</div>
       <div class="controls" style="border-top:none;margin-top:0;padding-top:0;justify-content:center">
-        <div class="ctl"><span>Min subs</span><input id="minsubs" value="1,000"></div>
-        <div class="ctl"><span>Max subs</span><input id="maxsubs" value="5,000,000"></div>
+        <div class="ctl"><span>Min subs</span><input id="minsubs" inputmode="numeric" value="1,000"></div>
+        <div class="ctl"><span>Max subs</span><input id="maxsubs" inputmode="numeric" value="5,000,000"></div>
         <input type="hidden" id="top" value="400">
         <input type="hidden" id="deep" checked>
         <input type="hidden" id="devonly" value="on">
@@ -372,9 +372,14 @@ function renderChips() {
     const src = (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/header.jpg' : null) || v?.img;
     if (src) {
       const im = document.createElement('img');
+      const tries = [
+        v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_616x353.jpg' : null,
+        v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_231x87.jpg' : null,
+        v?.img,
+      ].filter(Boolean);
       im.src = src;
       im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
-      im.onerror = () => im.remove();
+      im.onerror = () => { const n = tries.shift(); if (n) im.src = n; else im.remove(); };
       d.appendChild(im);
     }
     d.insertAdjacentHTML('beforeend', '<div class="gname">' + name + '</div>'
@@ -544,7 +549,12 @@ function renderRelated(elId, creator, games) {
     const im = document.createElement('img');
     im.src = 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg';
     im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
-    im.onerror = () => im.remove();
+    const tries = [
+      'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/capsule_616x353.jpg',
+      'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/capsule_231x87.jpg',
+      g.img,
+    ].filter(Boolean);
+    im.onerror = () => { const n = tries.shift(); if (n) im.src = n; else im.remove(); };
     const s = document.createElement('span');
     s.textContent = g.name;
     s.style.cssText = 'display:block;padding:5px 8px;font-size:11px;font-weight:600;line-height:1.25';
@@ -1026,9 +1036,12 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('input', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
+  e.target.value = e.target.value.replace(/[^\d]/g, '');
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
   const n = e.target.value.replace(/[^\d]/g, '');
   e.target.value = n ? Number(n).toLocaleString('en-US') : '';
-  e.target.setSelectionRange(e.target.value.length, e.target.value.length);
 });
 
 document.addEventListener('keydown', (e) => {
