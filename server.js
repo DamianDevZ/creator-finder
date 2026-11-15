@@ -609,7 +609,7 @@ $('go').onclick = async () => {
   const j = await res.json();
   $('go').disabled = false;
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
-  $('status').textContent = j.game + ' — ' + j.channelCount + ' channels found, ' + j.results.length + ' after filters · ' + j.queries + ' searches';
+  $('status').textContent = j.game + ' — ' + j.results.length + ' channels found · ' + j.queries + ' searches';
   // Populate language options from what was actually detected.
   lastResults = j.results;
   lastGame = j.game;
