@@ -159,6 +159,23 @@ const HTML = `<!DOCTYPE html>
   .dd-menu .opt:hover{background:var(--acc);color:#fff}
   .dd-menu .opt.sel{color:var(--acc);font-weight:700}
   .notes-cell>div{min-height:60px;display:flex;flex-direction:column;justify-content:center}
+  /* --- lists & triage --- */
+  .listbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .listbar select,.listbar input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none}
+  .vbtns{display:flex;gap:6px}
+  .vb{border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:600}
+  .vb.ok:hover{background:rgba(61,220,132,.15);border-color:var(--good);color:var(--good)}
+  .vb.no:hover{background:rgba(240,80,80,.15);border-color:var(--bad);color:var(--bad)}
+  .vb.ok.on{background:rgba(61,220,132,.15);border-color:var(--good);color:var(--good)}
+  .vb.no.on{background:rgba(240,80,80,.15);border-color:var(--bad);color:var(--bad)}
+  .qrow{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .qrow:last-child{border-bottom:none}
+  .qrow img{width:36px;height:36px;border-radius:50%}
+  .qcard{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left}
+  .qcard img{width:52px;height:52px;border-radius:50%}
+  .ltab{padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;font-size:12px;font-weight:600}
+  .ltab.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  .mailchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:11px;color:var(--txt);white-space:nowrap;cursor:pointer}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -232,6 +249,7 @@ const HTML = `<!DOCTYPE html>
 
   <div id="status"></div>
   <div id="out"></div>
+  <div id="lists"></div>
 
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
@@ -452,6 +470,7 @@ function buildLangMenu() {
     '<div class="opt' + (l === cur ? ' sel' : '') + '" data-l="' + l + '">' + (l === 'any' ? 'Any' : l) + '</div>').join('');
 }
 buildLangMenu();
+setTimeout(() => renderLists(), 0);
 $('langbtn').onclick = (e) => { e.stopPropagation(); buildLangMenu(); $('langmenu').classList.toggle('open'); };
 $('langmenu').addEventListener('click', (e) => {
   const o = e.target.closest('.opt'); if (!o) return;
@@ -516,8 +535,132 @@ $('go').onclick = async () => {
   $('status').textContent = j.game + ' — ' + j.channelCount + ' channels found · ' + j.queries + ' searches';
   // Populate language options from what was actually detected.
   renderTable(j.results);
+  lastGame = j.game;
+  renderLists();
   if (j.notesId) pollNotes(j.notesId);
 };
+
+// ============ LISTS (guest mode, localStorage; Supabase sync later) ============
+const LKEY = 'cf_lists';
+let lists = {};
+try { lists = JSON.parse(localStorage.getItem(LKEY)) || {}; } catch { lists = {}; }
+const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
+let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '';
+
+const snap = (r) => ({
+  channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
+  score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [],
+  language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
+});
+const queueFor = (l) => lastResults.filter((r) => !lists[l].verdicts[r.channelId]);
+
+function verdict(listName, cid, v) {
+  const l = lists[listName];
+  if (!l) return;
+  if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
+  const r = lastResults.find((x) => x.channelId === cid);
+  if (r && !l.channels[cid]) l.channels[cid] = snap(r);
+  saveLists();
+  renderLists();
+}
+
+function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+function chanLine(r) {
+  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+  const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
+  return thumb + '<div style="min-width:0;flex:1">'
+    + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><a href="' + r.url + '" target="_blank" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(r.channel) + '</a>'
+    + '<span class="pill ' + cls + '">' + r.score + '</span></div>'
+    + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language) + '</div></div>';
+}
+
+function renderLists() {
+  const el = $('lists');
+  if (!lastResults.length && !Object.keys(lists).length) { el.innerHTML = ''; return; }
+  const gameLists = Object.keys(lists).filter((n) => lists[n].game === lastGame);
+  const allLists = Object.keys(lists);
+
+  // --- no active list: picker ---
+  if (!activeList) {
+    el.innerHTML = '<div class="panel" style="margin-top:16px"><div class="seclabel" style="margin-top:0">Lists</div>'
+      + '<div class="listbar">'
+      + (allLists.length ? '<select id="lpick"><option value="">— pick a list —</option>' + allLists.map((n) => '<option>' + esc(n) + '</option>').join('') + '</select>' : '')
+      + '<input id="newlist" placeholder="New list name (e.g. Playtest outreach)">'
+      + '<button class="btn" data-act="startlist">Start reviewing</button>'
+      + '<span class="meta" style="font-size:11px">verdicts are saved per list — guest mode, stored in your browser</span>'
+      + '</div></div>';
+    return;
+  }
+
+  const l = lists[activeList];
+  const acc = Object.entries(l.verdicts).filter(([, v]) => v === 'a').map(([c]) => c);
+  const rej = Object.entries(l.verdicts).filter(([, v]) => v === 'r').map(([c]) => c);
+  const queue = queueFor(activeList).slice(qi);
+  const shown = triageMode === 'detailed' ? queue.slice(0, 3) : queue.slice(0, 10);
+
+  let body = '<div class="listbar" style="margin-bottom:14px">'
+    + '<b>' + esc(activeList) + '</b><span class="meta">' + esc(l.game) + '</span>'
+    + '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
+    + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
+    + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+    + (triageTab === 'queue' ? '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>' : '')
+    + '<button class="ltab" data-act="closelist">Done</button>'
+    + '</div>';
+
+  if (triageTab === 'queue') {
+    if (!shown.length) {
+      body += '<div class="meta" style="padding:24px;text-align:center">Queue empty — every candidate has a verdict. ' + acc.length + ' accepted, ' + rej.length + ' rejected.</div>';
+    } else if (triageMode === 'detailed') {
+      body += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">' + shown.map((r) =>
+        '<div class="qcard"><div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">' + chanLine(r) + '</div>'
+        + '<div class="meta" style="font-size:11px;margin-bottom:6px">Covers: ' + (r.games || []).map(esc).join(', ') + '</div>'
+        + '<div class="meta" style="font-size:11.5px;line-height:1.5;margin-bottom:10px">' + (r.notes || []).map(esc).join('<br>') + '</div>'
+        + (r.emails.length ? '<div style="margin-bottom:10px">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+        + '<div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>'
+        + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button></div></div>'
+      ).join('') + '</div>';
+    } else {
+      body += shown.map((r) =>
+        '<div class="qrow">' + chanLine(r)
+        + '<div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>'
+        + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button></div></div>'
+      ).join('');
+    }
+  } else {
+    const ids = triageTab === 'acc' ? acc : rej;
+    const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
+    body += rows.length
+      ? rows.map((r) =>
+        '<div class="qrow">' + chanLine(r)
+        + (triageTab === 'acc' && r.emails.length ? '<div>' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+        + '<div class="vbtns"><button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (triageTab === 'acc' ? 'r' : 'a') + '">' + (triageTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>'
+        + '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">Back to queue</button></div></div>'
+      ).join('')
+      : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
+  }
+  el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'startlist') {
+    const name = ($('newlist').value || $('lpick')?.value || '').trim();
+    if (!name) return;
+    if (!lists[name]) lists[name] = { game: lastGame, verdicts: {}, channels: {} };
+    activeList = name; triageTab = 'queue'; qi = 0; saveLists(); renderLists();
+  } else if (act === 'verdict') {
+    verdict(activeList, b.dataset.cid, b.dataset.v || null);
+  } else if (act === 'tab') {
+    triageTab = b.dataset.v; renderLists();
+  } else if (act === 'mode') {
+    triageMode = triageMode === 'detailed' ? 'compact' : 'detailed'; renderLists();
+  } else if (act === 'closelist') {
+    activeList = null; renderLists();
+  }
+});
 
 let notesPollTimer = null;
 async function pollNotes(id) {
