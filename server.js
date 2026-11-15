@@ -215,6 +215,7 @@ const HTML = `<!DOCTYPE html>
         <label class="ctl switch" title="Only show channels where we found an email"><input type="checkbox" id="emailonly"><span class="sw"></span><span style="text-transform:none;font-size:12px">Has email</span></label>
         <input type="hidden" id="devonly" value="on">
         <label class="ctl switch" title="Rewrite notes with AI (needs GEMINI_API_KEY)"><input type="checkbox" id="ainotes"><span class="sw"></span><span style="text-transform:none;font-size:12px">AI notes</span></label>
+        <label class="ctl switch" title="Quota-free search via yt-dlp. Local testing only — not for the deployed app."><input type="checkbox" id="dlp"><span class="sw"></span><span style="text-transform:none;font-size:12px">yt-dlp</span></label>
         <div class="ctl" style="position:relative"><span>Language</span>
           <input type="hidden" id="langfilter" value="English">
           <div class="dd-btn" id="langbtn" style="cursor:pointer;display:flex;align-items:center;gap:6px">English <span style="font-size:9px;color:var(--dim)">▾</span></div>
@@ -508,7 +509,7 @@ $('go').onclick = async () => {
     minsubs: +$('minsubs').value || 0, maxsubs: +$('maxsubs').value || null,
     top: +$('top').value || 30, deep: true, hidedev: true,
     emailonly: $('emailonly').checked,
-    lang: $('langfilter').value, ainotes: $('ainotes').checked,
+    lang: $('langfilter').value, ainotes: $('ainotes').checked, dlp: $('dlp').checked,
   };
   const res = await fetch('/api/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await res.json();
@@ -577,6 +578,7 @@ export const handler = async (req, res) => {
         minSubs: b.minsubs || 0,
         maxSubs: b.maxsubs || Infinity,
         deep: !!b.deep,
+        dlp: !!b.dlp,
       });
       // Server-side filters BEFORE slicing, so top N is filled with matches.
       let results = ranked.filter((r) =>

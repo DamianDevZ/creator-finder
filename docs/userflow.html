@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><title>User Flow</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>body{background:#eee;font:14px system-ui;margin:30px;display:flex;flex-direction:column;align-items:center}
+#frame{width:1400px;background:#fff;padding:40px 50px;box-sizing:border-box}
+h1{font-size:22px;margin:0 0 28px}
+button{margin:16px;padding:10px 22px;font-size:15px;cursor:pointer}</style></head>
+<body>
+<div id="frame"><h1>Creator Finder — User Flow</h1>
+<pre class="mermaid">
+flowchart TD
+  A["User pastes Steam link<br/>or searches game name"] --> B["Analyze game"]
+  B --> C["Fingerprint preview<br/>game info · tags · similar games"]
+  C --> D{"User edits search base?<br/>(add/remove tags or games)"}
+  D -->|Yes| E["Steam autocomplete search<br/>update tag/game lists"] --> C
+  D -->|No| F["Find creators"]
+  F --> G["YouTube scan<br/>searches similar-game videos"]
+  G --> H["Deep scan of top candidates<br/>latest 10 uploads per channel"]
+  H --> I["Ranked results table<br/>score · subs · avg views · covers<br/>language · notes · email"]
+  I --> J["User filters:<br/>sub range · has email · language"]
+  J --> K["Optional: AI notes fill in<br/>per channel"]
+  I --> L["User contacts creators<br/>(outreach emails)"]
+</pre></div>
+<button onclick="snap()">Download PNG</button>
+<script>
+mermaid.initialize({startOnLoad:true,theme:'default'});
+function snap(){
+  html2canvas(document.getElementById('frame'),{scale:1}).then(c=>{
+    const a=document.createElement('a');
+    a.download='user-flow.png';a.href=c.toDataURL('image/png');a.click();
+  });
+}
+</script></body></html>

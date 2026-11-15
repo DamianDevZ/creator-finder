@@ -87,6 +87,22 @@ export class YouTube {
     return this.#byId('channel', 'channels', 'snippet,statistics,brandingSettings,contentDetails', channelIds, WEEK);
   }
 
+  // Latest uploads via the channel's official RSS feed — ZERO quota.
+  // Falls back to the playlistItems API path on any failure.
+  async recentVideosRSS(channelId, maxResults = 15) {
+    try {
+      const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+      if (!res.ok) throw new Error(`RSS ${res.status}`);
+      const xml = await res.text();
+      const ids = [...xml.matchAll(/<yt:videoId>([^<]+)<\/yt:videoId>/g)]
+        .map((m) => m[1])
+        .slice(0, maxResults);
+      return ids.length ? this.videos(ids) : [];
+    } catch {
+      return this.recentVideos(channelId, maxResults);
+    }
+  }
+
   // Latest uploads for a channel — used for recency + recent-views scoring.
   // 1 unit for the uploads playlist id, then playlistItems is 1 unit/page.
   async recentVideos(channelId, maxResults = 15) {

@@ -3,6 +3,7 @@
 
 import { buildFingerprint } from './steam.js';
 import { scoreChannel, medianViews, daysSince } from './scoring.js';
+import { searchDlp } from './dlp.js';
 import { extractContacts, extractAlias, classifyChannel } from './contacts.js';
 
 const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -17,6 +18,7 @@ export async function findCreators(input, yt, {
   deepTop = 30,
   topN = 20,
   pages = 2,
+  dlp = false,
 } = {}) {
   const fp = await buildFingerprint(input, { manualTags });
   if (manualSimilar.length) fp.similarGames = manualSimilar.map((name, i) => ({ appid: `manual-${i}`, name }));
@@ -29,7 +31,8 @@ export async function findCreators(input, yt, {
   const hits = new Map();
   for (const q of queries) {
     const gameName = names.find((n) => q.toLowerCase().includes(n.toLowerCase())) || q;
-    for (const r of await yt.searchVideos(q, 50, pages)) {
+    const results = dlp ? await searchDlp(q, 50 * pages) : await yt.searchVideos(q, 50, pages);
+    for (const r of results) {
       const h = hits.get(r.channelId) || { channelTitle: r.channelTitle, videos: new Map(), games: new Set() };
       h.videos.set(r.videoId, { title: r.title, publishedAt: r.publishedAt, query: q });
       h.games.add(gameName);
@@ -77,7 +80,7 @@ export async function findCreators(input, yt, {
       .slice(0, deepTop);
     await Promise.all(
       preRanked.map(async (c) => {
-        const recent = await yt.recentVideos(c.channelId, 10);
+        const recent = await yt.recentVideosRSS(c.channelId, 10);
         if (recent.length) {
           c.medViews = Math.round(recent.reduce((s, v) => s + Number(v.statistics?.viewCount || 0), 0) / recent.length);
           c.daysSince = daysSince(recent[0].snippet.publishedAt);
