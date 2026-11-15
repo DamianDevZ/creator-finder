@@ -222,6 +222,8 @@ const HTML = `<!DOCTYPE html>
   .qt .channame a:hover{color:var(--acc)}
   .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);min-height:36px}
   .scanload{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 24px}
+  .skl{background:linear-gradient(90deg,var(--panel2) 25%,var(--bg3) 50%,var(--panel2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .qt td:last-child{padding-right:20px}
   /* detailed creator card */
   .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
@@ -897,6 +899,20 @@ function renderNav() {
   }).join('') || '<div class="meta" style="padding:6px;font-size:11.5px">No lists yet</div>';
 }
 
+function skelCards() {
+  const one = '<div class="qcard2"><div class="qc-left" style="align-self:center">'
+    + '<div class="skl" style="width:84px;height:84px;border-radius:50%;margin:0 auto"></div>'
+    + '<div class="skl" style="width:110px;height:13px;border-radius:6px;margin:12px auto 0"></div>'
+    + '<div class="skl" style="width:80px;height:10px;border-radius:5px;margin:7px auto 0"></div></div>'
+    + '<div class="qc-main"><div class="qc-stats">'
+    + '<div class="qstat"><div class="skl" style="width:60px;height:10px;border-radius:5px"></div><div class="skl" style="width:44px;height:20px;border-radius:6px;margin-top:8px"></div></div>'.repeat(4)
+    + '</div><div class="skl" style="width:70%;height:11px;border-radius:5px;margin:6px 0 10px"></div>'
+    + '<div class="skl" style="width:92%;height:11px;border-radius:5px;margin-bottom:14px"></div>'
+    + '<div class="meta" style="display:flex;align-items:center;gap:8px"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>Searching for creators…</div>'
+    + '</div></div>';
+  return one + one + one;
+}
+
 function renderLists() {
   const el = $('lists');
   $('viewtitle').textContent = activeList || 'Creator Finder';
@@ -932,10 +948,10 @@ function renderLists() {
 
   if (!l) {
     if (!queue.length) {
-      body += '<div class="meta" style="padding:24px;text-align:center">'
-        + (lastGame
-          ? (expandDone ? 'Pool exhausted — the whole frontier has been scanned. Run a new scan or widen filters.' : 'No creators matched — the scan returned 0 (YouTube quota may be exhausted, or filters too strict). Try again or widen filters.')
-          : 'No candidates — run a scan first.')
+      body += (lastGame && !expandDone)
+        ? skelCards()
+        : '<div class="meta" style="padding:24px;text-align:center">'
+        + (lastGame ? 'Pool exhausted — the whole frontier has been scanned. Run a new scan or widen filters.' : 'No candidates — run a scan first.')
         + '</div>';
       el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
       return;
@@ -954,7 +970,9 @@ function renderLists() {
 
   if (triageTab === 'queue') {
     if (!shown.length) {
-      body += '<div class="meta" style="padding:24px;text-align:center">Pool exhausted — all candidates reviewed (' + acc.length + ' accepted, ' + rej.length + ' rejected). Run a new scan to refill.</div>';
+      body += expandDone
+        ? '<div class="meta" style="padding:24px;text-align:center">Pool exhausted — all candidates reviewed (' + acc.length + ' accepted, ' + rej.length + ' rejected). Run a new scan to refill.</div>'
+        : skelCards();
     } else if (triageMode === 'detailed') {
       body += shown.map((r) => detailCard(r,
         '<button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
