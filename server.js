@@ -618,9 +618,12 @@ $('go').onclick = async () => {
   let gameList = Object.keys(lists).find((n) => lists[n].game === j.game);
   if (!gameList) {
     gameList = j.game + ' General';
-    lists[gameList] = { game: j.game, verdicts: {}, channels: {} };
-    saveLists();
+    lists[gameList] = { game: j.game, verdicts: {}, channels: {}, pool: {} };
   }
+  // Refresh this game's candidate pool from the scan (verdicts persist).
+  lists[gameList].pool = {};
+  for (const r of j.results) lists[gameList].pool[r.channelId] = snap(r);
+  saveLists();
   if (!activeList) activeList = gameList;
   triageTab = 'queue';
   renderLists();
@@ -638,15 +641,16 @@ const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
+  vidTitles: r.vidTitles || [],
 });
-const queueFor = (l) => lastResults.filter((r) => !(lists[l].verdicts || {})[r.channelId]);
+const queueFor = (l) => Object.values(lists[l].pool || {}).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
 function verdict(listName, cid, v) {
   const l = lists[listName];
   if (!l) return;
-  l.verdicts ||= {}; l.channels ||= {};
+  l.verdicts ||= {}; l.channels ||= {}; l.pool ||= {};
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
-  const r = lastResults.find((x) => x.channelId === cid);
+  const r = l.pool[cid] || lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
   saveLists();
   renderLists();
@@ -749,7 +753,7 @@ function renderLists() {
 
   if (triageTab === 'queue') {
     if (!shown.length) {
-      body += '<div class="meta" style="padding:24px;text-align:center">Queue empty — every candidate has a verdict. ' + acc.length + ' accepted, ' + rej.length + ' rejected.</div>';
+      body += '<div class="meta" style="padding:24px;text-align:center">Pool exhausted — all candidates reviewed (' + acc.length + ' accepted, ' + rej.length + ' rejected). Run a new scan to refill.</div>';
     } else if (triageMode === 'detailed') {
       body += shown.map((r) => detailCard(r,
         '<button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
