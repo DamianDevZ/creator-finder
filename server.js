@@ -491,6 +491,8 @@ autocomplete('addtag', 'tagdd', '/api/search-tags', (t) => { tagSet.add(t); rend
 
 $('load').onclick = async () => {
   $('status').innerHTML = '<span class="spinner"></span>Profiling game…';
+  // Clear the previous game's results — a new game means a new queue.
+  lastResults = []; lastGame = ''; renderLists();
   const res = await fetch('/api/fingerprint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: $('link').value }) });
   const j = await res.json();
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
@@ -629,19 +631,12 @@ $('go').onclick = async () => {
   // Populate language options from what was actually detected.
   lastResults = j.results;
   lastGame = j.game;
-  // Auto-create "{game} General" if this game has no list yet,
-  // and auto-open the game's list so the queue shows immediately.
-  let gameList = Object.keys(lists).find((n) => lists[n].game === j.game);
-  if (!gameList) {
-    gameList = j.game + ' General';
-    lists[gameList] = { game: j.game, verdicts: {}, channels: {} };
-  }
-  // Refresh this game's candidate pool from the scan (verdicts persist).
+  // Refresh this game's candidate pool (lists are never auto-created).
   pools[j.game] = {};
   for (const r of j.results) pools[j.game][r.channelId] = snap(r);
   savePools();
-  saveLists();
-  if (!activeList) activeList = gameList;
+  // A selected list for a different game no longer applies to these results.
+  if (activeList && lists[activeList] && lists[activeList].game !== j.game) activeList = null;
   triageTab = 'queue';
   renderLists();
   if (j.notesId) pollNotes(j.notesId);
