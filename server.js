@@ -458,21 +458,15 @@ $('langmenu').addEventListener('click', (e) => {
   $('langfilter').value = o.dataset.l;
   $('langbtn').childNodes[0].textContent = o.dataset.l === 'any' ? 'Any' : o.dataset.l;
   $('langmenu').classList.remove('open');
-  renderTable(lastResults);
 });
 document.addEventListener('click', () => $('langmenu').classList.remove('open'));
 
-$('emailonly').onchange = () => renderTable(lastResults);
+
 function renderTable(results) {
   lastResults = results;
   const arrow = k => k === sortKey ? (sortDir === -1 ? ' ↓' : ' ↑') : '';
   const head = '<tr>' + COLS.map(([k,l]) => '<th data-k="' + k + '" onclick="sortBy(this.dataset.k)">' + l + arrow(k) + '</th>').join('') + '</tr>';
-  const langSel = $('langfilter').value;
-  const filtered = results.filter(r =>
-    (!$('emailonly').checked || r.emails.length) &&
-    r.niche !== 'Dev/studio' &&
-    (langSel === 'any' || (r.language || 'English') === langSel)
-  );
+  const filtered = results;
   const sorted = [...filtered].sort((a,b) => {
     const f = COLS.find(c=>c[0]===sortKey)[2], x=f(a), y=f(b);
     return (x<y?-1:x>y?1:0)*sortDir;
