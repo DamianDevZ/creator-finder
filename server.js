@@ -600,11 +600,12 @@ const snap = (r) => ({
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
 });
-const queueFor = (l) => lastResults.filter((r) => !lists[l].verdicts[r.channelId]);
+const queueFor = (l) => lastResults.filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
 function verdict(listName, cid, v) {
   const l = lists[listName];
   if (!l) return;
+  l.verdicts ||= {}; l.channels ||= {};
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
   const r = lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
@@ -650,6 +651,8 @@ function renderLists() {
   if (!activeList) { el.innerHTML = ''; return; }
 
   const l = lists[activeList];
+  if (!l) { activeList = null; renderLists(); return; }
+  l.verdicts ||= {}; l.channels ||= {};
   const acc = Object.entries(l.verdicts).filter(([, v]) => v === 'a').map(([c]) => c);
   const rej = Object.entries(l.verdicts).filter(([, v]) => v === 'r').map(([c]) => c);
   const queue = queueFor(activeList).slice(qi);
