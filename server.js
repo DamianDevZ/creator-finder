@@ -202,7 +202,7 @@ const HTML = `<!DOCTYPE html>
   .qt{width:100%;border-collapse:collapse;table-layout:fixed}
   .qt th{padding:10px 14px;text-align:left}
   .qt td{padding:11px 14px;vertical-align:middle;border-top:1px solid var(--line)}
-  .qt .channame{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qt .channame{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .qt .channame a{color:var(--txt);text-decoration:none}
   .qt .channame a:hover{color:var(--acc)}
   .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim)}
@@ -210,20 +210,20 @@ const HTML = `<!DOCTYPE html>
   /* detailed creator card */
   .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
   .qc-left{width:190px;flex-shrink:0;text-align:center;align-self:center}
-  .qc-left img{width:64px;height:64px;border-radius:50%}
+  .qc-left img{width:84px;height:84px;border-radius:50%}
   .qcard2 .qc-name{display:block;font-weight:700;font-size:15px;color:var(--txt);text-decoration:none;margin-top:10px}
   .qcard2 .qc-name:hover{color:var(--acc)}
   .qcard2 .qc-sub{font-size:11.5px;color:var(--dim);margin-top:4px}
   .qc-main{flex:1;min-width:0}
-  .qc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-  .qstat{background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .qc-stats{display:flex;gap:10px;align-items:stretch;margin-bottom:14px}
+  .qstat{flex:1;background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
   .qstat .qs-l{font-size:10px;letter-spacing:.6px;color:var(--dim);text-transform:uppercase;font-weight:700}
   .qstat .qs-v{font-size:15px;font-weight:700;margin-top:4px}
   .qc-rows{display:grid;grid-template-columns:64px 1fr;row-gap:9px;font-size:12.5px;margin-bottom:14px}
   .qc-lbl{color:var(--dim);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding-top:1px}
   .qc-val{color:var(--txt);line-height:1.55}
-  .qc-act{display:flex;gap:10px;justify-content:flex-end}
-  .vb.big{padding:14px 24px;font-size:14px;border-radius:10px;min-width:120px}
+  .qc-act{display:flex;gap:10px;align-items:stretch}
+  .vb.big{padding:0 18px;font-size:13px;border-radius:10px;min-width:96px}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -706,26 +706,27 @@ function renderLists() {
         return '<div class="qcard2">'
           + '<div class="qc-left">' + thumb
           + '<a class="qc-name" href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a>'
-          + '<div class="qc-sub">' + (r.alias ? esc(r.alias) : 'Creator') + '</div></div>'
+          + '<div class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</div></div>'
           + '<div class="qc-main">'
           + '<div class="qc-stats">'
           + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
           + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
           + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
-          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
+          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div>'
+          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
+          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div></div>'
           + '<div class="qc-rows">'
           + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
           + '<div class="qc-lbl">About</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
+          + ((r.vidTitles || []).length ? '<div class="qc-lbl">Videos</div><div class="qc-val" style="color:var(--dim)">' + r.vidTitles.slice(0, 3).map(esc).join('<br>') + '</div>' : '')
           + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
           + '</div>'
-          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
-          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div>'
           + '</div></div>';
       }).join('');
     } else {
       // compact: mini-table — score, channel, subs, language, notes, email, verdict
       body += '<table class="qt">'
-        + '<tr><th style="width:56px">Score</th><th style="width:230px">Channel</th><th style="width:70px">Subs</th><th style="width:80px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:100px"></th></tr>'
+        + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:100px"></th></tr>'
         + shown.map((r) => {
           const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
           const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
