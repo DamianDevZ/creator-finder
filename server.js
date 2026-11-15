@@ -369,11 +369,11 @@ function renderChips() {
   for (const [name, v] of simMap) {
     const d = document.createElement('div');
     d.className = 'gcard';
-    const src = v?.img || (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_184x69.jpg' : null);
+    const src = (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/header.jpg' : null) || v?.img;
     if (src) {
       const im = document.createElement('img');
       im.src = src;
-      im.style.cssText = 'width:100%;display:block;aspect-ratio:231/87;object-fit:cover';
+      im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
       im.onerror = () => im.remove();
       d.appendChild(im);
     }
@@ -542,8 +542,8 @@ function renderRelated(elId, creator, games) {
     const c = document.createElement('div');
     c.style.cssText = 'border-radius:8px;overflow:hidden;border:1px solid var(--line);cursor:pointer;transition:.15s;background:var(--panel2)';
     const im = document.createElement('img');
-    im.src = g.img; im.style.cssText = 'width:100%;display:block';
-    im.onload = () => { im.style.aspectRatio = im.naturalWidth + '/' + im.naturalHeight; };
+    im.src = 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg';
+    im.style.cssText = 'width:100%;display:block;aspect-ratio:460/215;object-fit:cover';
     im.onerror = () => im.remove();
     const s = document.createElement('span');
     s.textContent = g.name;
@@ -660,55 +660,67 @@ $('go').onclick = async () => {
   maybeExpand();
 };
 
-// Rolling expansion: whenever the unreviewed queue drops below 20, top it up
-// 10 candidates at a time. A background scan fills a buffer first — most
-// top-ups then drain the buffer instantly with no network at all.
+// Rolling expansion: keep at least one untouched batch of ~20 candidates
+// queued up at all times. The moment the first verdict lands (or the queue
+// otherwise drops under two batches), the next frontier round is fetched and
+// fully processed in the background — including AI notes.
 async function maybeExpand() {
   if (expanding || !lastGame || expandDone) return;
-  const pool = poolFor(lastGame);
-  const left = Object.values(pool).filter((r) => !((lists[activeList] && lists[activeList].verdicts) || {})[r.channelId]).length;
-  if (left >= 20) return;
+  const left = () => Object.values(poolFor(lastGame)).filter((r) => !((lists[activeList] && lists[activeList].verdicts) || {})[r.channelId]).length;
+  if (left() >= 40) return;
   expanding = true;
   try {
-    // Drain the buffer first — instant, no network.
-    if (expandBuffer.length) {
-      for (const r of expandBuffer.splice(0, 10)) if (!pool[r.channelId]) pool[r.channelId] = r;
-      savePools(); updTabs();
-      expanding = false; maybeExpand(); return;
+    const pool = (pools[lastGame] ||= {});
+    let added = 0, rounds = 0;
+    while (added < 20 && rounds < 4) {
+      if (!expandBuffer.length) {
+        if (!await fetchRound()) { expandDone = true; break; }
+        rounds++;
+      }
+      const r = expandBuffer.shift();
+      if (!r) break;
+      if (!pool[r.channelId]) {
+        if (notesCache[r.channelId]) { r.aiNote = notesCache[r.channelId]; r.aiPending = false; }
+        pool[r.channelId] = r; added++;
+      }
     }
-    // Buffer empty — fetch the next frontier round (up to one pick per base game).
-    const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
-    const er = await fetch('/api/expand-games', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags().join(',') }),
-    });
-    const ej = await er.json();
-    if (!er.ok) { expandDone = true; expanding = false; return; }
-    const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
-    batch.forEach((g) => usedGameNames.add(g.name.toLowerCase()));
-    if (!batch.length) { expandDone = true; expanding = false; updTabs(); return; }
-    const res = await fetch('/api/find', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        input: lastInput, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
-        minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
-        maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
-        top: 400, deep: true, hidedev: true, emailonly: true,
-        lang: $('langfilter').value, ainotes: true, dlp: true,
-      }),
-    });
-    const j = await res.json();
-    if (res.ok && j.results) {
-      const fresh = j.results.map(snap).filter((r) => !pool[r.channelId]);
-      expandBuffer = fresh;
-      for (const r of expandBuffer.splice(0, 10)) pool[r.channelId] = r;
-      savePools();
-      if (j.notesId) pollNotes(j.notesId);
-      updTabs();
-    }
+    savePools(); updTabs();
+    if (added) renderLists();
   } catch {}
   expanding = false;
   maybeExpand();
+}
+
+// One frontier round: next pick per base game -> scan -> buffer candidates.
+async function fetchRound() {
+  const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
+  const er = await fetch('/api/expand-games', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags().join(',') }),
+  });
+  const ej = await er.json().catch(() => ({}));
+  if (!er.ok) return false;
+  const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
+  batch.forEach((g) => usedGameNames.add(g.name.toLowerCase()));
+  if (!batch.length) return false;
+  const res = await fetch('/api/find', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: lastInput, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
+      minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
+      maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
+      top: 400, deep: true, hidedev: true, emailonly: true,
+      lang: $('langfilter').value, ainotes: true, dlp: true,
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.results) return true; // round consumed; keep advancing
+  const pool = poolFor(j.game);
+  const fresh = j.results.map(snap).filter((r) => !pool[r.channelId] && !expandBuffer.some((b) => b.channelId === r.channelId));
+  if (j.notesId) fresh.forEach((r) => { r.aiPending = true; });
+  expandBuffer.push(...fresh);
+  if (j.notesId) pollNotes(j.notesId);
+  return true;
 }
 
 // ============ LISTS (guest mode, localStorage; Supabase sync later) ============
@@ -723,8 +735,9 @@ for (const [n, l] of Object.entries(lists)) {
 }
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
-let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
+let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
+const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -774,9 +787,9 @@ function detailCard(r, btns) {
   const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
   return '<div class="qcard2">'
-    + '<div class="qc-left">' + thumb
-    + '<a class="qc-name" href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a>'
-    + '<div class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</div></div>'
+    + '<a class="qc-left" href="' + r.url + '" target="_blank" style="text-decoration:none;color:inherit">' + thumb
+    + '<span class="qc-name" style="display:block">' + esc(r.channel) + '</span>'
+    + '<span class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</span></a>'
     + '<div class="qc-main">'
     + '<div class="qc-stats">'
     + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
@@ -784,7 +797,7 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
-    + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
+    + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="https://store.steampowered.com/search/?term=' + encodeURIComponent(g) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
     + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
@@ -856,7 +869,7 @@ function renderLists() {
       + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
       : '')
-    + '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>'
+    + '<span style="margin-left:auto"></span>'
     + '</div>';
 
   if (!l) {
@@ -1057,6 +1070,8 @@ async function pollNotes(id) {
     try {
       const j = await fetch('/api/notes?id=' + id).then(r => r.json());
       if (j.done) {
+        for (const [cid, n] of Object.entries(j.notes || {})) notesCache[cid] = n;
+        for (const b of expandBuffer) if (notesCache[b.channelId]) { b.aiNote = notesCache[b.channelId]; b.aiPending = false; }
         targets.forEach(r => {
           r.aiPending = false;
           if (j.notes && j.notes[r.channelId]) r.aiNote = j.notes[r.channelId];
