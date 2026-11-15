@@ -638,6 +638,9 @@ $('go').onclick = async () => {
   // Populate language options from what was actually detected.
   lastResults = j.results;
   lastGame = j.game;
+  lastInput = $('link').value;
+  expandQueue = j.expansion || [];
+  usedGameNames = new Set([j.game, ...simMap.keys()].map((n) => n.toLowerCase()));
   // Refresh this game's candidate pool (lists are never auto-created).
   pools[j.game] = {};
   for (const r of j.results) pools[j.game][r.channelId] = snap(r);
@@ -646,7 +649,47 @@ $('go').onclick = async () => {
   triageTab = 'queue';
   renderLists();
   if (j.notesId) pollNotes(j.notesId);
+  maybeExpand();
 };
+
+// Rolling expansion: when the unscored backup pool drops below 5, silently
+// scan the next batch of tag-matched games and merge new candidates in.
+async function maybeExpand() {
+  if (expanding || !lastGame || !expandQueue.length) return;
+  const pool = poolFor(lastGame);
+  const left = Object.values(pool).filter((r) => !((lists[activeList] && lists[activeList].verdicts) || {})[r.channelId]).length;
+  if (left > 15) return;
+  const batch = [];
+  while (batch.length < 5 && expandQueue.length) {
+    const n = expandQueue.shift();
+    if (!usedGameNames.has(n.toLowerCase())) { usedGameNames.add(n.toLowerCase()); batch.push(n); }
+  }
+  if (!batch.length) return;
+  expanding = true;
+  try {
+    const res = await fetch('/api/find', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: lastInput, similar: batch.join(','), tags: [...tagSet].join(','),
+        minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
+        maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
+        top: 400, deep: true, hidedev: true, emailonly: true,
+        lang: $('langfilter').value, ainotes: true, dlp: true,
+      }),
+    });
+    const j = await res.json();
+    if (res.ok && j.results) {
+      const pool = (pools[j.game] ||= {});
+      for (const r of j.results) if (!pool[r.channelId]) pool[r.channelId] = snap(r);
+      savePools();
+      expandQueue.push(...(j.expansion || []));
+      if (j.notesId) pollNotes(j.notesId);
+      updTabs();
+    }
+  } catch {}
+  expanding = false;
+  maybeExpand();
+}
 
 // ============ LISTS (guest mode, localStorage; Supabase sync later) ============
 const LKEY = 'cf_lists';
@@ -661,6 +704,7 @@ for (const [n, l] of Object.entries(lists)) {
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
+let lastInput = '', expandQueue = [], usedGameNames = new Set(), expanding = false;
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -721,7 +765,8 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · '))) + '</div>'
+    + '<div class="qc-lbl">Type</div><div class="qc-val">' + esc((r.notes || []).join(' · ')) + '</div>'
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
     + '<div class="qc-act">' + btns + '</div>'
@@ -742,7 +787,7 @@ function qRow(r, btns) {
 
 function qTable(rows, lastW, btns) {
   return '<table class="qt">'
-    + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
+    + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Type</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
     + rows.map((r) => qRow(r, btns)).join('') + '</table>';
 }
 
@@ -898,6 +943,7 @@ document.addEventListener('click', (e) => {
         : parent.querySelectorAll('tr').length - 1;
       if (onQueue && !remaining) renderLists();
       else updTabs();
+      maybeExpand();
     }, 180);
   } else if (act === 'lmcreate') {
     const name = $('lmname').value.trim();
@@ -946,7 +992,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-document.addEventListener('input', (e) => {
+document.addEventListener('change', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
   const n = e.target.value.replace(/[^\d]/g, '');
   e.target.value = n ? Number(n).toLocaleString('en-US') : '';
@@ -1067,7 +1113,7 @@ export const handler = async (req, res) => {
           });
         setTimeout(() => notesJobs.delete(notesId), 10 * 60 * 1000);
       }
-      return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId });
+      return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId, expansion: (fp.expandedGames || []).map((g) => g.name) });
     }
     if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
       const md = url.pathname === '/privacy' ? PRIVACY_MD : TERMS_MD;
