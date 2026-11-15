@@ -199,6 +199,10 @@ const HTML = `<!DOCTYPE html>
   .lpmi.on{color:var(--acc);font-weight:600}
   .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
   .lmbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #notifs{position:fixed;top:14px;right:14px;z-index:400;display:flex;flex-direction:column;gap:8px;max-width:360px}
+  .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
+  .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
+  .kchip.claimed{border-color:#d4a017;color:#e8c35a}.kchip.redeemed{border-color:var(--good);color:var(--good)}
   .lmbox input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none}
   .listbar select,.listbar input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none}
   .vbtns{display:flex;gap:6px}
@@ -344,6 +348,7 @@ const HTML = `<!DOCTYPE html>
       <div style="font-weight:700;margin-bottom:4px">Create a list</div>
       <div class="meta" style="font-size:11.5px;margin-bottom:12px">Verdicts need a list to live in.</div>
       <input id="lmname" placeholder="e.g. Release outreach" autocomplete="off">
+      <input id="lmgoal" placeholder="Goal — how many creators? (optional)" inputmode="numeric" style="margin-top:8px">
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="ltab" data-act="lmcancel">Cancel</button>
         <button class="btn" data-act="lmcreate" style="padding:8px 18px;font-size:13px">Create</button>
@@ -380,6 +385,9 @@ const HTML = `<!DOCTYPE html>
       </div>
       <textarea id="ctemplate" rows="10" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit"></textarea>
       <div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">Steam keys</div>
+      <textarea id="ckeys" rows="4" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace"></textarea>
+      <div class="meta" id="ckeycount" style="font-size:10.5px;margin-top:4px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button class="ltab" data-act="ccancel">Close</button>
         <button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & preview drafts</button>
@@ -388,6 +396,7 @@ const HTML = `<!DOCTYPE html>
     </div>
   </div>
 
+  <div id="notifs"></div>
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
     <a href="/terms" style="color:var(--dim)">Terms of Service</a>
@@ -863,6 +872,8 @@ function verdict(listName, cid, v, quiet) {
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
+  // Leaving Accepted releases that creator's steam keys back to the pool.
+  if (v !== 'a' && l.keys) l.keys.forEach((k) => { if (k.cid === cid) { k.st = 'free'; delete k.cid; delete k.at; } });
   const r = poolFor(lastGame)[cid] || lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
   saveLists();
@@ -916,6 +927,12 @@ function detailCard(r, btns) {
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
     + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · ') || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+    + (r.coverage ? '<div class="qc-lbl">' + (r.coverage.confirmed ? 'Covered' : 'Coverage?') + '</div><div class="qc-val">'
+      + '<a href="' + esc(r.coverage.url) + '" target="_blank" style="color:inherit"><b>' + esc(r.coverage.title) + '</b></a>'
+      + (r.coverage.confirmed ? ' <span class="pill p-good">✓</span>'
+        : ' <button class="vb ok" data-act="covok" data-cid="' + r.channelId + '" style="margin-left:6px">Confirm</button>'
+        + '<button class="vb" data-act="covno" data-cid="' + r.channelId + '" style="margin-left:4px">Dismiss</button>')
+      + '</div>' : '')
     + '</div>'
     + '<div class="qc-act">' + btns + '</div>'
     + '</div></div></div>';
@@ -998,6 +1015,9 @@ function renderLists() {
       ? '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
       + '<span style="margin-left:auto"></span>'
+      + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
+      + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
+      + '</button>'
       + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button>'
       + '<button class="ltab" data-act="campaign" style="font-size:11.5px;border-color:var(--acc);color:var(--acc)">✉ Campaign</button>'
       : '')
@@ -1119,8 +1139,10 @@ document.addEventListener('click', (e) => {
     const name = $('lmname').value.trim();
     if (!name) return;
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
+    const g = parseInt($('lmgoal').value.replace(/[^\\d]/g, ''), 10);
+    if (g > 0) lists[name].goal = g;
     activeList = name; triageTab = 'acc'; qi = 0;
-    $('lmodal').style.display = 'none'; $('lmname').value = '';
+    $('lmodal').style.display = 'none'; $('lmname').value = ''; $('lmgoal').value = '';
     saveLists();
     const pv = pendingVerdict; pendingVerdict = null;
     if (pv) verdict(activeList, pv.cid, pv.v); else renderLists();
@@ -1195,9 +1217,49 @@ document.addEventListener('click', (e) => {
     const to = (r?.emails || [])[0];
     if (!to) return;
     const camp = readCampForm();
-    const subj = fillTemplate(camp.subject || '{game} — would love to see it on your channel', r, camp);
-    window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(fillTemplate(camp.template, r, camp));
-    l.sent ||= {}; l.sent[r.channelId] = Date.now(); saveCampaign(); renderPreviews();
+    saveCampaign(); // merge the keys textarea so the pool is current
+    let assigned = assignedKeys(l, r.channelId);
+    if (!assigned.length && (l.keys || []).length) {
+      const need = Math.min((l.alloc && l.alloc[r.channelId]) || 1, freeKeys(l).length);
+      if (need < 1) { alert('No free keys left — add more or release some.'); renderPreviews(); return; }
+      assigned = freeKeys(l).slice(0, need);
+      assigned.forEach((k) => { k.st = 'sent'; k.cid = r.channelId; k.at = Date.now(); });
+    }
+    const kt = keyTextFor(l, r.channelId) || '(no keys assigned)';
+    const subj = fillTemplate(camp.subject || '{game} — would love to see it on your channel', r, camp, kt);
+    window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(fillTemplate(camp.template, r, camp, kt));
+    l.sent ||= {}; l.sent[r.channelId] = Date.now(); saveLists(); renderPreviews(); updKeyCount();
+  } else if (act === 'goal') {
+    const l = lists[activeList]; if (!l) return;
+    const v = prompt('Outreach goal — how many creators to contact? (empty to clear)', l.goal || '');
+    if (v === null) return;
+    const g = parseInt(v.replace(/[^\\d]/g, ''), 10);
+    if (g > 0) l.goal = g; else delete l.goal;
+    saveLists(); renderLists();
+  } else if (act === 'keyadj') {
+    const l = lists[activeList]; if (!l) return;
+    l.alloc ||= {};
+    const cur = l.alloc[b.dataset.cid] || 1;
+    l.alloc[b.dataset.cid] = Math.min(Math.max(1, cur + (+b.dataset.d)), Math.max(1, freeKeys(l).length));
+    saveLists(); renderPreviews();
+  } else if (act === 'keycycle') {
+    const l = lists[activeList]; if (!l) return;
+    const k = (l.keys || []).find((x) => x.k === b.dataset.k && x.cid === b.dataset.cid);
+    if (k) { k.st = KNEXT[k.st] || 'sent'; saveLists(); renderPreviews(); }
+  } else if (act === 'covok') {
+    const l = lists[activeList]; const ch = l?.channels?.[b.dataset.cid];
+    if (ch?.coverage) { ch.coverage.confirmed = true; saveLists(); renderLists(); renderNotifs(); }
+  } else if (act === 'covno') {
+    const l = lists[activeList]; const ch = l?.channels?.[b.dataset.cid];
+    if (ch) { delete ch.coverage; ch.coverageChecked = Date.now(); saveLists(); renderLists(); renderNotifs(); }
+  } else if (act === 'notifview') {
+    const n = pendingNotifs[+b.dataset.i]; if (!n) return;
+    activeList = n.list; triageTab = 'acc'; qi = 0;
+    $('base').style.display = 'none'; $('backlist').style.display = 'none';
+    pendingNotifs.splice(+b.dataset.i, 1);
+    renderLists(); renderNotifs();
+  } else if (act === 'notifx') {
+    pendingNotifs.splice(+b.dataset.i, 1); renderNotifs();
   }
 });
 
@@ -1205,22 +1267,27 @@ document.addEventListener('click', (e) => {
 const SKEY = 'cf_sender';
 const DEF_TPL = "Hi {alias},\n\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\n\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\n\n{keys}\n\nHappy to answer any questions — thanks for your time!\n\nKind regards,\n{dev}";
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
+const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
+const freeKeys = (l) => (l.keys || []).filter((k) => k.st === 'free');
+const KSTATUS = { sent: 'sent', claimed: 'claimed', redeemed: 'redeemed' };
+const KNEXT = { sent: 'claimed', claimed: 'redeemed', redeemed: 'sent' };
 
-function fillTemplate(tpl, c, camp) {
+function fillTemplate(tpl, c, camp, keyText) {
   let note = (c.aiNote || (c.notes || [])[0] || 'great coverage of games like this').replace(/[.\s]+$/, '');
   note = note.charAt(0).toLowerCase() + note.slice(1);
   const map = {
     '{name}': c.channel || '', '{alias}': c.alias || c.channel || 'there',
     '{note}': note, '{game}': camp.game || '', '{dev}': camp.dev || '',
-    '{keys}': 'Key 1: …\nKey 2: …',
+    '{keys}': keyText || '(keys will be assigned when you send)',
   };
   return String(tpl || '').replace(/\{(name|alias|note|game|dev|keys)\}/g, (m) => map[m] ?? m);
 }
+const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => k.k).join('\n');
 
 function readCampForm() {
   return { game: $('cgame').value.trim(), dev: $('cdev').value.trim(), email: $('cemail').value.trim(), subject: $('csubject').value.trim(), template: $('ctemplate').value };
 }
-const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm());
+const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm(), keyTextFor(l, r.channelId));
 function openCampaign() {
   const l = lists[activeList]; if (!l) return;
   let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
@@ -1230,23 +1297,49 @@ function openCampaign() {
   $('cemail').value = c.email || s.email || '';
   $('csubject').value = c.subject || '';
   $('ctemplate').value = c.template || DEF_TPL;
+  $('ckeys').value = (l.keys || []).map((k) => k.k).join('\n');
   $('cpreviews').innerHTML = '';
+  updKeyCount();
   $('cmodal').style.display = 'flex';
+}
+function updKeyCount() {
+  const l = lists[activeList]; if (!l) return;
+  const free = freeKeys(l).length, used = (l.keys || []).length - free;
+  $('ckeycount').textContent = (l.keys || []).length ? free + ' free · ' + used + ' assigned (click a key chip in the drafts to cycle its status)' : 'No keys yet — paste them above and save.';
 }
 function saveCampaign() {
   const l = lists[activeList]; if (!l) return;
   const c = readCampForm(); l.campaign = c;
+  // Merge the keys textarea: keep status/assignment of known keys, add new,
+  // drop removed ones only if still free.
+  const seen = new Set();
+  const want = $('ckeys').value.split('\n').map((x) => x.trim()).filter(Boolean);
+  l.keys ||= [];
+  const have = new Map(l.keys.map((k) => [k.k, k]));
+  l.keys = want.filter((k) => !seen.has(k) && seen.add(k)).map((k) => have.get(k) || { k, st: 'free' });
+  for (const k of have.values()) if (k.cid && !want.includes(k.k)) l.keys.push(k); // assigned keys never vanish
   let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
   localStorage.setItem(SKEY, JSON.stringify({ ...s, dev: c.dev, email: c.email }));
-  saveLists();
+  saveLists(); updKeyCount();
 }
 function renderPreviews() {
   const l = lists[activeList]; if (!l) return;
   const c = readCampForm();
   const rows = accChannels(l);
+  const free = freeKeys(l).length;
   $('cpreviews').innerHTML = rows.length ? rows.map((r) => {
     const to = (r.emails || [])[0];
     const sent = l.sent && l.sent[r.channelId];
+    const assigned = assignedKeys(l, r.channelId);
+    const want = Math.min((l.alloc && l.alloc[r.channelId]) || 1, Math.max(1, free));
+    const keyLine = assigned.length
+      ? '<div style="margin-top:6px">' + assigned.map((k) =>
+          '<span class="kchip ' + (k.st === 'sent' ? '' : k.st) + '" data-act="keycycle" data-cid="' + r.channelId + '" data-k="' + esc(k.k) + '" title="click: ' + k.st + ' → ' + KNEXT[k.st] + '">' + esc(k.k) + '</span>').join('') + '</div>'
+      : '<div style="margin-top:6px;display:flex;align-items:center;gap:4px;font-size:11px" class="meta">keys:'
+        + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="-1" style="padding:1px 8px">−</button>'
+        + ' <b>' + want + '</b> '
+        + '<button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="1" style="padding:1px 8px">+</button>'
+        + ' <span>(' + free + ' free)</span></div>';
     return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       + '<b style="font-size:13px">' + esc(r.channel) + '</b>'
@@ -1254,8 +1347,9 @@ function renderPreviews() {
       + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
       + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy draft</button>'
       + (to ? '<button class="vb ok" data-act="sendc" data-cid="' + r.channelId + '">Send →</button>' : '')
-      + '</div>'
-      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">' + esc(fillTemplate(c.template, r, c)) + '</pre></div>';
+      + '</div>' + keyLine
+      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">'
+      + esc(fillTemplate(c.template, r, c, keyTextFor(l, r.channelId))) + '</pre></div>';
   }).join('') : '<div class="meta" style="padding:16px;text-align:center">No accepted creators yet.</div>';
 }
 
@@ -1278,6 +1372,44 @@ $('aq').oninput = () => {
     } catch { $('ares').innerHTML = '<div class="meta" style="padding:10px;font-size:12px">Search failed.</div>'; }
   }, 350);
 };
+
+// ---- Coverage detection --------------------------------------------
+// On load: re-scan uploads of every creator we've contacted, looking for
+// videos since the send date that mention the game in title/description.
+let pendingNotifs = [];
+function renderNotifs() {
+  $('notifs').innerHTML = pendingNotifs.map((n, i) =>
+    '<div class="notifitem"><div style="flex:1"><b>' + esc(n.ch.channel) + '</b> may have made a video about <b>' + esc(n.game) + '</b></div>'
+    + '<button class="vb ok" data-act="notifview" data-i="' + i + '">View</button>'
+    + '<button class="vb" data-act="notifx" data-i="' + i + '">✕</button></div>').join('');
+}
+async function checkCoverage() {
+  for (const [n, l] of Object.entries(lists)) {
+    const game = ((l.campaign && l.campaign.game) || lastGame || '').trim();
+    if (!game || !l.sent) continue;
+    const creators = accChannels(l)
+      .filter((c) => l.sent[c.channelId] && !(c.coverage && c.coverage.confirmed)
+        && (!c.coverageChecked || Date.now() - c.coverageChecked > 86400000))
+      .map((c) => ({ channelId: c.channelId, since: l.sent[c.channelId] }));
+    if (!creators.length) continue;
+    try {
+      const j = await fetch('/api/check-coverage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game, creators }),
+      }).then((r) => r.json());
+      for (const h of j.hits || []) {
+        const ch = l.channels[h.channelId]; if (!ch) continue;
+        ch.coverage = { ...h.video, confirmed: false };
+        pendingNotifs.push({ list: n, ch, game });
+      }
+      creators.forEach((c) => { const ch = l.channels[c.channelId]; if (ch) ch.coverageChecked = Date.now(); });
+      saveLists();
+    } catch {}
+  }
+  renderNotifs();
+  if (activeList) renderLists();
+}
+setTimeout(checkCoverage, 1500);
 
 document.addEventListener('input', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
@@ -1421,6 +1553,22 @@ export const handler = async (req, res) => {
       const b = await readBody(req);
       if (!process.env.GEMINI_API_KEY) return json(200, { template: null });
       return json(200, { template: await campaignTemplate(process.env.GEMINI_API_KEY, { game: b.game || 'my game', dev: b.dev || 'the developer' }).catch(() => null) });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/check-coverage') {
+      const b = await readBody(req);
+      const game = (b.game || '').toLowerCase().trim();
+      const out = [];
+      await Promise.all((b.creators || []).slice(0, 60).map(async (c) => {
+        const vids = await yt.recentVideosRSS(c.channelId, 15).catch(() => []);
+        const hit = vids
+          .filter((v) => new Date(v.snippet?.publishedAt || 0).getTime() >= (c.since || 0))
+          .find((v) => (String(v.snippet?.title) + ' ' + String(v.snippet?.description || '')).toLowerCase().includes(game));
+        if (hit) out.push({
+          channelId: c.channelId,
+          video: { videoId: hit.id, title: hit.snippet.title, date: hit.snippet.publishedAt, url: 'https://youtu.be/' + hit.id },
+        });
+      }));
+      return json(200, { hits: out });
     }
     if (req.method === 'POST' && url.pathname === '/api/fingerprint') {
       const b = await readBody(req);
