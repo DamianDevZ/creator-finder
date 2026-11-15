@@ -891,7 +891,11 @@ function renderLists() {
 
   if (!l) {
     if (!queue.length) {
-      body += '<div class="meta" style="padding:24px;text-align:center">No candidates — run a scan first.</div>';
+      body += '<div class="meta" style="padding:24px;text-align:center">'
+        + (lastGame
+          ? (expandDone ? 'Pool exhausted — the whole frontier has been scanned. Run a new scan or widen filters.' : 'No creators matched — the scan returned 0 (YouTube quota may be exhausted, or filters too strict). Try again or widen filters.')
+          : 'No candidates — run a scan first.')
+        + '</div>';
       el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
       return;
     }
