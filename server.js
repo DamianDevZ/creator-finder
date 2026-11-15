@@ -606,10 +606,22 @@ export const handler = async (req, res) => {
     }
     if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
       const md = url.pathname === '/privacy' ? PRIVACY_MD : TERMS_MD;
+      const html = md
+        .replace(/</g, '&lt;')
+        .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>')
+        .replace(/^- (.*)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>(\n|$))+/g, (m) => '<ul>' + m + '</ul>')
+        .split(/\n\n+/).map((b) => /^<(h1|h2|ul)/.test(b.trim()) ? b : '<p>' + b.replace(/\n/g, '<br>') + '</p>').join('\n');
       res.writeHead(200, { 'Content-Type': 'text/html' });
       return res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder</title>
-<style>body{background:#0b0e14;color:#c8d0e0;font:15px/1.7 system-ui;max-width:720px;margin:40px auto;padding:0 20px}h1{color:#fff}a{color:#7c8cf8}</style></head>
-<body><pre style="white-space:pre-wrap;font:inherit">${md}</pre><p><a href="/">← Back</a></p></body></html>`);
+<style>body{background:#0b0e14;color:#c8d0e0;font:15px/1.75 system-ui;max-width:680px;margin:0 auto;padding:48px 20px 80px}
+h1{color:#fff;font-size:26px;margin:0 0 24px;padding-bottom:14px;border-bottom:1px solid #2a3142}
+h2{color:#e6ebf5;font-size:18px;margin:32px 0 10px}p{margin:12px 0}ul{padding-left:22px}li{margin:6px 0}
+strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;padding:8px 16px;border:1px solid #2a3142;border-radius:8px;text-decoration:none}
+</style></head><body>${html}<a class="back" href="/">← Back to Creator Finder</a></body></html>`);
     }
     if (req.method === 'GET' && url.pathname === '/api/notes') {
       const job = notesJobs.get(url.searchParams.get('id'));
