@@ -155,6 +155,14 @@ export async function expandFrontier(bases, usedNames, ourTags, neighbors = 20) 
     .filter(Boolean);
 }
 
+// A game's top defining tags: SteamSpy first (vote-ordered), store page for
+// tiny untagged games. Generic tags (3D, singleplayer…) are filtered out.
+async function topTagsFor(appid, n = 4) {
+  let tags = (await fetchSteamSpy(appid).catch(() => null))?.tags || [];
+  if (!tags.length) tags = (await fetchStorePageMeta(appid).catch(() => ({ tags: [] }))).tags;
+  return tags.filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).slice(0, n);
+}
+
 // Other titles by the same developer/publisher — handy context for users.
 async function fetchRelatedByCreator(name, excludeAppid) {
   if (!name) return [];
@@ -190,20 +198,17 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
   }
   similar = similar.slice(0, 12);
   // Each base game's defining tags — shown on its card and used by expansion.
-  await Promise.all(
-    similar.map(async (g) => {
-      const spy = await fetchSteamSpy(g.appid).catch(() => null);
-      g.topTags = (spy?.tags || []).filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).slice(0, 4);
-    })
-  );
+  await Promise.all(similar.map(async (g) => { g.topTags = await topTagsFor(g.appid); }));
   const dev = details.developers[0], pub = details.publishers[0];
   const [devGames, pubGames] = await Promise.all([
     fetchRelatedByCreator(dev, appid),
     pub && pub !== dev ? fetchRelatedByCreator(pub, appid) : [],
   ]);
+  await Promise.all([...devGames, ...pubGames].map(async (g) => { g.topTags = await topTagsFor(g.appid); }));
   return {
     ...details,
     tags,
+    topTags: tags.filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).slice(0, 4),
     owners: spy.owners,
     reviewScore:
       spy.positive != null && spy.negative != null && spy.positive + spy.negative > 0

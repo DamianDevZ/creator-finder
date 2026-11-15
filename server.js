@@ -220,6 +220,7 @@ const HTML = `<!DOCTYPE html>
   .qt .channame a{color:var(--txt);text-decoration:none}
   .qt .channame a:hover{color:var(--acc)}
   .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);min-height:36px}
+  .scanload{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:70px 24px}
   .qt td:last-child{padding-right:20px}
   /* detailed creator card */
   .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
@@ -287,6 +288,7 @@ const HTML = `<!DOCTYPE html>
           <img id="gameimg" style="display:none;width:100%;border-radius:10px">
           <div class="gametitle" id="gametitle"></div>
           <div class="meta" id="gamemeta"></div>
+          <div id="gametags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px"></div>
         </div>
         <div id="reldev" style="flex:1;min-width:0"></div>
         <div id="relpub" style="flex:1;min-width:0"></div>
@@ -514,6 +516,7 @@ $('load').onclick = async () => {
   if (activeList) $('backlist').style.display = '';
   $('gametitle').textContent = j.name;
   $('gamemeta').textContent = [(j.developers || []).join(', '), (j.publishers || []).filter(p => !(j.developers || []).includes(p)).join(', ')].filter(Boolean).join(' · ') || j.genres.join(' · ');
+  $('gametags').innerHTML = (j.topTags || []).map((t) => '<span class="tag">' + t + '</span>').join('');
   renderRelated('reldev', j.developers?.[0], j.relatedByDeveloper);
   renderRelated('relpub', j.publishers?.[0], j.relatedByPublisher);
   $('gameimg').style.display = 'none';
@@ -549,8 +552,11 @@ function renderRelated(elId, creator, games) {
     im.onerror = () => im.remove();
     const s = document.createElement('span');
     s.textContent = g.name;
-    s.style.cssText = 'display:block;padding:5px 8px;font-size:11px;font-weight:600;line-height:1.25';
-    c.append(im, s);
+    s.style.cssText = 'display:block;padding:5px 8px 2px;font-size:11px;font-weight:600;line-height:1.25';
+    const tg = document.createElement('div');
+    tg.textContent = (g.topTags || []).slice(0, 3).join(' · ');
+    tg.style.cssText = 'padding:0 8px 6px;font-size:9.5px;color:var(--dim);line-height:1.4;min-height:13px';
+    c.append(im, s, tg);
     c.onmouseenter = () => c.style.borderColor = 'var(--acc)';
     c.onmouseleave = () => c.style.borderColor = 'var(--line)';
     c.onclick = () => {
@@ -628,7 +634,10 @@ $('go').onclick = async () => {
   $('out').innerHTML = '';
   lastResults = []; lastGame = ''; $('lists').innerHTML = '';
   if (activeList) $('backlist').style.display = '';
-  $('status').innerHTML = '<span class="spinner"></span>Scanning YouTube… usually 30–60s on a cold run.';
+  $('status').innerHTML = '';
+  $('lists').innerHTML = '<div class="panel"><div class="scanload"><div class="spinner" style="width:38px;height:38px;border-width:4px"></div>'
+    + '<div style="font-size:16px;font-weight:700;margin-top:16px">Finding creators…</div>'
+    + '<div class="meta" style="margin-top:6px">Searching YouTube for channels covering these games — usually 30–60s on a cold run.</div></div></div>';
   const body = {
     input: $('link').value,
     similar: [...simMap.keys()].join(','), tags: derivedTags().join(','),
@@ -640,8 +649,8 @@ $('go').onclick = async () => {
   const res = await fetch('/api/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await res.json();
   $('go').disabled = false;
-  if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
-  $('status').textContent = j.game + ' — ' + j.results.length + ' channels found · ' + j.queries + ' searches';
+  if (!res.ok) { $('lists').innerHTML = '<div class="panel"><div class="scanload" style="color:var(--rej)">Error: ' + esc(j.error || 'scan failed') + '</div></div>'; return; }
+  $('status').textContent = '';
   // Populate language options from what was actually detected.
   lastResults = j.results;
   lastGame = j.game;
@@ -673,9 +682,10 @@ async function maybeExpand() {
     const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
     const er = await fetch('/api/expand-games', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags() }),
+      body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags().join(',') }),
     });
     const ej = await er.json();
+    if (!er.ok) { expandDone = true; expanding = false; return; }
     const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
     batch.forEach((g) => usedGameNames.add(g.name.toLowerCase()));
     if (!batch.length) { expandDone = true; expanding = false; updTabs(); return; }
@@ -846,7 +856,7 @@ function renderLists() {
       ? '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
-      : '<span class="meta" style="font-size:12px">' + queue.length + ' candidates — pick a list to triage into</span>')
+      : '')
     + '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>'
     + '</div>';
 
@@ -945,7 +955,8 @@ document.addEventListener('click', (e) => {
             + '<button class="vb ok" data-act="verdict" data-cid="' + x.channelId + '" data-v="a">✓</button>');
         const frag = document.createElement('template');
         frag.innerHTML = html;
-        parent.insertBefore(frag.content.firstChild, nextSib);
+        if (nextSib && nextSib.parentNode === parent) parent.insertBefore(frag.content.firstChild, nextSib);
+        else parent.appendChild(frag.content.firstChild);
       }
       const remaining = triageMode === 'detailed'
         ? parent.querySelectorAll('.qcard2').length
@@ -1064,7 +1075,7 @@ async function pollNotes(id) {
 </body>
 </html>`;
 
-const list = (s) => (s || '').split(',').map((t) => t.trim()).filter(Boolean);
+const list = (s) => (Array.isArray(s) ? s : (s || '').split(',')).map((t) => t.trim()).filter(Boolean);
 const readBody = async (req) => {
   let b = '';
   for await (const c of req) b += c;
