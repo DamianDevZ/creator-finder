@@ -231,8 +231,7 @@ const HTML = `<!DOCTYPE html>
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
     <a href="/terms" style="color:var(--dim)">Terms of Service</a>
-    <a href="https://github.com/DamianDevZ/creator-finder" style="color:var(--dim)">GitHub</a>
-    <span style="color:var(--dim)">· Powered by the <b style="color:#f00">YouTube</b> Data API</span>
+    <span style="color:var(--dim)">Powered by the <b style="color:#f00">YouTube</b> Data API</span>
   </footer>
 </div>
 <script>
