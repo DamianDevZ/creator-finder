@@ -613,6 +613,7 @@ document.addEventListener('click', (e) => {
 $('go').onclick = async () => {
   $('go').disabled = true;
   $('out').innerHTML = '';
+  lastResults = []; lastGame = ''; renderLists();
   if (activeList) $('backlist').style.display = '';
   $('status').innerHTML = '<span class="spinner"></span>Scanning YouTube… usually 30–60s on a cold run.';
   const body = {
@@ -635,8 +636,7 @@ $('go').onclick = async () => {
   pools[j.game] = {};
   for (const r of j.results) pools[j.game][r.channelId] = snap(r);
   savePools();
-  // A selected list for a different game no longer applies to these results.
-  if (activeList && lists[activeList] && lists[activeList].game !== j.game) activeList = null;
+  // Lists aren't game-tied — the selected list stays, verdicts apply to it.
   triageTab = 'queue';
   renderLists();
   if (j.notesId) pollNotes(j.notesId);
@@ -663,14 +663,14 @@ const snap = (r) => ({
   vidTitles: r.vidTitles || [],
 });
 const poolFor = (game) => pools[game] || {};
-const queueFor = (l) => Object.values(poolFor(lists[l].game)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
+const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
 function verdict(listName, cid, v) {
   const l = lists[listName];
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
-  const r = poolFor(l.game)[cid] || lastResults.find((x) => x.channelId === cid);
+  const r = poolFor(lastGame)[cid] || lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
   saveLists();
   renderLists();
@@ -729,14 +729,14 @@ function qTable(rows, lastW, btns) {
 
 let renaming = null, openMenu = null;
 function renderNav() {
-  const names = Object.keys(lists).sort((a, b) => (lists[a].game + a).localeCompare(lists[b].game + b));
+  const names = Object.keys(lists).sort();
   $('navlists').innerHTML = names.map((n) => {
     if (n === renaming)
       return '<div class="navitem on"><input id="navrename" value="' + esc(n) + '" style="flex:1;min-width:0;background:var(--bg3);border:1px solid var(--acc);border-radius:6px;color:var(--txt);padding:4px 8px;font-size:13px;outline:none"></div>';
     const l = lists[n];
     const cnt = Object.keys(l.verdicts).length;
     return '<div class="navitem' + (n === activeList ? ' on' : '') + '" data-act="openlist" data-n="' + esc(n) + '">'
-      + '<div class="nm"><div>' + esc(n) + '</div><div class="g">' + esc(l.game || '') + (cnt ? ' · ' + cnt : '') + '</div></div>'
+      + '<div class="nm"><div>' + esc(n) + '</div><div class="g">' + (cnt ? cnt + ' reviewed' : '') + '</div></div>'
       + '<span class="navdots" data-act="itemmenu" data-n="' + esc(n) + '">⋮</span>'
       + '<div class="navmenu' + (openMenu === n ? ' open' : '') + '">'
       + '<div class="mi" data-act="rename" data-n="' + esc(n) + '">Rename</div>'
@@ -749,10 +749,10 @@ function renderLists() {
   $('viewtitle').textContent = activeList || 'Creator Finder';
   renderNav();
   const l = activeList ? lists[activeList] : null;
-  const game = (l && l.game) || lastGame || '';
+  const game = lastGame || '';
   if (!game && !Object.keys(lists).length) { el.innerHTML = ''; return; }
   const pool = poolFor(game);
-  const gameLists = Object.keys(lists).filter((n) => lists[n].game === game);
+  const gameLists = Object.keys(lists);
   const acc = l ? Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => c) : [];
   const rej = l ? Object.entries(l.verdicts || {}).filter(([, v]) => v === 'r').map(([c]) => c) : [];
   const queue = Object.values(pool).filter((r) => !((l && l.verdicts) || {})[r.channelId]).slice(qi);
@@ -826,7 +826,7 @@ document.addEventListener('click', (e) => {
   if (act === 'startlist') {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
-    if (!lists[name]) lists[name] = { game: lastGame, verdicts: {}, channels: {} };
+    if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; triageTab = 'queue'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
     if (!activeList) {
@@ -845,7 +845,7 @@ document.addEventListener('click', (e) => {
   } else if (act === 'lmcreate') {
     const name = $('lmname').value.trim();
     if (!name) return;
-    if (!lists[name]) lists[name] = { game: lastGame || 'General', verdicts: {}, channels: {} };
+    if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; triageTab = 'queue'; qi = 0;
     $('lmodal').style.display = 'none'; $('lmname').value = '';
     saveLists();
@@ -910,7 +910,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.id === 'navlistname') {
     const name = e.target.value.trim();
     if (!name) return;
-    if (!lists[name]) lists[name] = { game: lastGame || 'General', verdicts: {}, channels: {} };
+    if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; e.target.value = ''; $('newlistbox').style.display = 'none';
     saveLists(); renderLists();
   } else if (e.target.id === 'navrename') {
