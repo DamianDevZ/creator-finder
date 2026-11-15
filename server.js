@@ -479,7 +479,7 @@ function autocomplete(inputId, ddId, endpoint, onPick) {
   inp.oninput = () => {
     clearTimeout(timer);
     const q = inp.value.trim();
-    if (q.length < 3 || /steampowered\.com|^\d+$/.test(q)) { dd.style.display = 'none'; return; }
+    if (q.length < 3 || /steampowered\.com|^\\d+$/.test(q)) { dd.style.display = 'none'; return; }
     timer = setTimeout(async () => {
       const items = await (await fetch('/api/search-games?term=' + encodeURIComponent(q))).json();
       dd.innerHTML = '';
@@ -643,7 +643,7 @@ $('go').onclick = async () => {
   const body = {
     input: $('link').value,
     similar: [...simMap.keys()].join(','), tags: derivedTags().join(','),
-    minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0, maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
+    minsubs: +$('minsubs').value.replace(/[^\\d]/g, '') || 0, maxsubs: +$('maxsubs').value.replace(/[^\\d]/g, '') || null,
     top: +$('top').value || 30, deep: true, hidedev: true,
     emailonly: true,
     lang: $('langfilter').value, ainotes: true, dlp: true,
@@ -717,8 +717,8 @@ async function fetchRound() {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       input: lastInput, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
-      minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
-      maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
+      minsubs: +$('minsubs').value.replace(/[^\\d]/g, '') || 0,
+      maxsubs: +$('maxsubs').value.replace(/[^\\d]/g, '') || null,
       top: 400, deep: true, hidedev: true, emailonly: true,
       lang: $('langfilter').value, ainotes: true, dlp: true,
     }),
@@ -1036,11 +1036,11 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('input', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
-  e.target.value = e.target.value.replace(/[^\d]/g, '');
+  e.target.value = e.target.value.replace(/[^\\d]/g, '');
 });
 document.addEventListener('change', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
-  const n = e.target.value.replace(/[^\d]/g, '');
+  const n = e.target.value.replace(/[^\\d]/g, '');
   e.target.value = n ? Number(n).toLocaleString('en-US') : '';
 });
 
