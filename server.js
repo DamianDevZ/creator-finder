@@ -361,6 +361,7 @@ function renderChips(kind) {
   if (kind === 'sim') {
     const el = $('simchips');
     el.querySelectorAll('.gcard').forEach(c => c.remove());
+    $('addcardbtn').style.display = simMap.size >= 12 ? 'none' : '';
     for (const [name, v] of simMap) {
       const d = document.createElement('div');
       d.className = 'gcard';
@@ -416,7 +417,7 @@ $('addcardbtn').onclick = () => {
         const lbl = document.createElement('span');
         lbl.textContent = it.name;
         d.append(img, lbl);
-        d.onclick = () => { simMap.set(it.name, { appid: it.appid, img: it.img }); renderChips('sim'); dd.style.display = 'none'; resetAddCard(); };
+        d.onclick = () => { if (simMap.size >= 12) { dd.style.display = 'none'; resetAddCard(); return; } simMap.set(it.name, { appid: it.appid, img: it.img }); renderChips('sim'); dd.style.display = 'none'; resetAddCard(); };
         grid.appendChild(d);
       }
       dd.style.display = items.length ? 'block' : 'none';
