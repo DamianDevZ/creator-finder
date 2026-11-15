@@ -198,6 +198,26 @@ const HTML = `<!DOCTYPE html>
   .ltab{padding:6px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;font-size:12px;font-weight:600}
   .ltab.on{background:var(--acc);border-color:var(--acc);color:#fff}
   .mailchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:11px;color:var(--txt);white-space:nowrap;cursor:pointer}
+  /* queue table */
+  .qt{width:100%;border-collapse:collapse}
+  .qt th{padding:10px 14px;text-align:left}
+  .qt td{padding:12px 14px;vertical-align:middle;border-top:1px solid var(--line)}
+  .qt td.nw{white-space:nowrap;width:1%}
+  .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .qt td:last-child{padding-right:20px}
+  /* detailed creator card */
+  .qcard2{display:flex;gap:20px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:12px}
+  .qcard2 .qc-id{display:flex;align-items:center;gap:14px;width:220px;flex-shrink:0}
+  .qcard2 .qc-id img{width:56px;height:56px;border-radius:50%}
+  .qcard2 .qc-name{font-weight:700;font-size:15px;color:var(--txt);text-decoration:none;display:block}
+  .qcard2 .qc-name:hover{color:var(--acc)}
+  .qcard2 .qc-sub{font-size:12px;color:var(--dim);margin-top:3px}
+  .qcard2 .qc-mid{flex:1;min-width:0}
+  .qcard2 .qc-stats{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--dim);margin:8px 0}
+  .qcard2 .qc-stats b{color:var(--txt);font-weight:600}
+  .qcard2 .qc-notes{font-size:12.5px;line-height:1.55;color:var(--txt);opacity:.9;margin-top:6px}
+  .qcard2 .qc-act{display:flex;gap:10px;flex-shrink:0;align-self:center}
+  .vb.big{padding:16px 20px;font-size:14px;border-radius:10px;min-width:110px}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -624,7 +644,7 @@ function chanLine(r) {
   return thumb + '<div style="min-width:0;flex:1">'
     + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><a href="' + r.url + '" target="_blank" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(r.channel) + '</a>'
     + '<span class="pill ' + cls + '">' + r.score + '</span></div>'
-    + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language) + '</div></div>';
+    + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language || 'English') + '</div></div>';
 }
 
 let renaming = null, openMenu = null;
@@ -677,35 +697,35 @@ function renderLists() {
       body += shown.map((r) => {
         const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
         const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
-        return '<div class="qcard" style="display:flex;gap:18px;align-items:flex-start;margin-bottom:10px">'
-          + '<div style="display:flex;align-items:center;gap:12px;min-width:240px">' + thumb + '<div style="min-width:0">'
-          + '<a href="' + r.url + '" target="_blank" style="font-weight:700;font-size:15px">' + esc(r.channel) + '</a>'
-          + '<div class="meta" style="font-size:11px">' + (r.alias ? esc(r.alias) + ' · ' : '') + fmt(r.subs) + ' subs</div></div></div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><span class="pill ' + cls + '">' + r.score + '</span>'
-          + '<span class="meta" style="font-size:11px">avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language) + '</span></div>'
-          + '<div class="meta" style="font-size:11px;margin-bottom:6px">Covers: ' + (r.games || []).map(esc).join(', ') + '</div>'
-          + '<div style="font-size:12px;line-height:1.55;color:var(--txt);opacity:.85">' + (r.notes || []).map(esc).join('<br>') + '</div>'
+        return '<div class="qcard2">'
+          + '<div class="qc-id">' + thumb + '<div style="min-width:0">'
+          + '<a class="qc-name" href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a>'
+          + '<div class="qc-sub">' + (r.alias ? esc(r.alias) + ' · ' : '') + fmt(r.subs) + ' subs</div></div></div>'
+          + '<div class="qc-mid">'
+          + '<div class="qc-stats"><span class="pill ' + cls + '">' + r.score + '</span>'
+          + '<span>avg <b>' + fmt(r.medianViews) + '</b> views</span><span><b>' + esc(r.language || 'English') + '</b></span></div>'
+          + '<div class="covers">Covers: ' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
+          + '<div class="qc-notes">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
           + (r.emails.length ? '<div style="margin-top:8px">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
           + '</div>'
-          + '<div class="vbtns" style="flex-direction:column;align-self:center"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>'
-          + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button></div></div>';
+          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
+          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div></div>';
       }).join('');
     } else {
       // compact: mini-table — score, channel, subs, language, notes, email, verdict
-      body += '<table><tr><th>Score</th><th>Channel</th><th>Subs</th><th>Language</th><th>Notes</th><th>Email</th><th></th></tr>'
+      body += '<table class="qt"><tr><th>Score</th><th>Channel</th><th>Subs</th><th>Language</th><th>Notes</th><th>Email</th><th></th></tr>'
         + shown.map((r) => {
           const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
-          const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--panel2)">';
-          return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
-            + '<td><div class="chan">' + thumb + '<div><div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></div></td>'
-            + '<td class="num">' + fmt(r.subs) + '</td>'
-            + '<td><span class="meta" style="font-size:12px">' + esc(r.language) + '</span></td>'
-            + '<td class="meta" style="max-width:200px;font-size:11.5px;line-height:1.4">'
-            + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</td>'
-            + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
-            + '<td style="white-space:nowrap"><div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>'
-            + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button></div></td></tr>';
+          const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
+          return '<tr><td class="nw"><span class="pill ' + cls + '">' + r.score + '</span></td>'
+            + '<td class="nw"><div class="chan">' + thumb + '<div><div class="channame"><a href="' + r.url + '" target="_blank" style="color:var(--txt)">' + esc(r.channel) + '</a></div></div></div></td>'
+            + '<td class="nw num">' + fmt(r.subs) + '</td>'
+            + '<td class="nw"><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
+            + '<td><div class="qnotes">'
+            + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
+            + '<td class="nw">' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
+            + '<td class="nw"><div class="vbtns"><button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
+            + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button></div></td></tr>';
         }).join('') + '</table>';
     }
   } else {
