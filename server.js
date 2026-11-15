@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { Cache } from './src/cache.js';
 import { SupaCache } from './src/sbcache.js';
-import { YouTube } from './src/youtube.js';
+import { YouTube, channelProfileScrape } from './src/youtube.js';
 import { buildFingerprint, expandFrontier } from './src/steam.js';
 import { findCreators } from './src/pipeline.js';
 import { extractContacts, extractAlias, classifyChannel } from './src/contacts.js';
@@ -1510,22 +1510,28 @@ export const handler = async (req, res) => {
       return json(200, { names: picks });
     }
     if (req.method === 'GET' && url.pathname === '/api/channel-search') {
-      const q = url.searchParams.get('q') || '';
-      const ids = await yt.searchChannels(q, 8);
-      const chans = await yt.channels(ids);
-      return json(200, chans.map((c) => ({
-        channelId: c.id,
-        name: c.snippet?.title || '',
-        thumb: c.snippet?.thumbnails?.default?.url || '',
-        subs: Number(c.statistics?.subscriberCount || 0),
-      })));
+      return json(200, await yt.searchChannels(url.searchParams.get('q') || '', 8));
     }
     if (req.method === 'POST' && url.pathname === '/api/channel-profile') {
       const b = await readBody(req);
-      const [ch] = await yt.channels([b.channelId]);
-      if (!ch) return json(404, { error: 'Channel not found' });
+      const [ch] = await yt.channels([b.channelId]).catch(() => []);
       const recent = await yt.recentVideosRSS(b.channelId, 10).catch(() => []);
-      const texts = [ch.snippet?.description, ...recent.flatMap((v) => [v.snippet?.title, v.snippet?.description])].filter(Boolean);
+      let base;
+      if (ch) {
+        base = {
+          channelId: ch.id,
+          channel: ch.snippet?.title || '',
+          subs: Number(ch.statistics?.subscriberCount || 0),
+          thumb: ch.snippet?.thumbnails?.medium?.url || ch.snippet?.thumbnails?.default?.url || '',
+          desc: ch.snippet?.description || '',
+        };
+      } else {
+        // API quota dead — scrape the public channel page instead.
+        const p = await channelProfileScrape(b.channelId).catch(() => null);
+        if (!p || !p.name) return json(404, { error: 'Channel not found' });
+        base = { channelId: p.channelId, channel: p.name, subs: p.subs, thumb: p.thumb, desc: p.desc };
+      }
+      const texts = [base.desc, ...recent.flatMap((v) => [v.snippet?.title, v.snippet?.description])].filter(Boolean);
       const { emails, socials } = extractContacts(texts);
       const alias = extractAlias(texts, emails);
       const { niche, styles, language } = classifyChannel(texts);
@@ -1533,17 +1539,16 @@ export const handler = async (req, res) => {
         ? Math.round(recent.reduce((s, v) => s + Number(v.statistics?.viewCount || 0), 0) / recent.length)
         : null;
       const ds = recent[0]?.snippet?.publishedAt ? daysSince(recent[0].snippet.publishedAt) : null;
-      const subs = Number(ch.statistics?.subscriberCount || 0);
       const { score, breakdown } = scoreChannel({
-        relevantVideoCount: 0, medianRecentViews: medViews, subscriberCount: subs, daysSinceLastUpload: ds,
+        relevantVideoCount: 0, medianRecentViews: medViews, subscriberCount: base.subs, daysSinceLastUpload: ds,
       });
       return json(200, {
-        channelId: ch.id,
-        channel: ch.snippet?.title || '',
-        thumb: ch.snippet?.thumbnails?.medium?.url || ch.snippet?.thumbnails?.default?.url || '',
-        url: `https://youtube.com/channel/${ch.id}`,
-        subs, medianViews: medViews, daysSince: ds,
-        description: (ch.snippet?.description || '').slice(0, 300),
+        channelId: base.channelId,
+        channel: base.channel,
+        thumb: base.thumb,
+        url: `https://youtube.com/channel/${base.channelId}`,
+        subs: base.subs, medianViews: medViews, daysSince: ds,
+        description: base.desc.slice(0, 300),
         alias, niche, language,
         notes: [styles.length ? styles.join(' · ') : 'General gaming'],
         vidTitles: recent.map((v) => v.snippet?.title).filter(Boolean).slice(0, 8),
