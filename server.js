@@ -575,7 +575,7 @@ $('go').onclick = async () => {
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
   $('status').textContent = j.game + ' — ' + j.channelCount + ' channels found · ' + j.queries + ' searches';
   // Populate language options from what was actually detected.
-  renderTable(j.results);
+  lastResults = j.results;
   lastGame = j.game;
   // Auto-create "{game} General" if this game has no list yet.
   if (!Object.values(lists).some((l) => l.game === j.game)) {
@@ -695,7 +695,8 @@ function renderLists() {
             + '<td><div class="chan">' + thumb + '<div><div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></div></td>'
             + '<td class="num">' + fmt(r.subs) + '</td>'
             + '<td><span class="meta" style="font-size:12px">' + esc(r.language) + '</span></td>'
-            + '<td class="meta" style="max-width:200px;font-size:11.5px;line-height:1.4">' + (r.notes || []).map(esc).join('<br>') + '</td>'
+            + '<td class="meta" style="max-width:200px;font-size:11.5px;line-height:1.4">'
+            + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</td>'
             + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
             + '<td style="white-space:nowrap"><div class="vbtns"><button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>'
             + '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button></div></td></tr>';
@@ -786,7 +787,7 @@ document.addEventListener('click', (e) => {
 let notesPollTimer = null;
 async function pollNotes(id) {
   lastResults.forEach(r => { r.aiPending = true; });
-  renderTable(lastResults);
+  renderLists();
   clearTimeout(notesPollTimer);
   const tick = async () => {
     try {
@@ -796,7 +797,7 @@ async function pollNotes(id) {
           r.aiPending = false;
           if (j.notes && j.notes[r.channelId]) r.notes = [j.notes[r.channelId]];
         });
-        renderTable(lastResults);
+        renderLists();
         return;
       }
     } catch {}
