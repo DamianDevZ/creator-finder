@@ -118,6 +118,43 @@ export async function fetchSimilarGames(appid, tags, limit = 8) {
     .slice(0, limit);
 }
 
+// Rolling expansion frontier: for each base game, find its best not-yet-used
+// neighbor ranked by shared-tag count (base game's tags + our tags), min 3.
+// Each call returns up to one pick per base — call again for the next round.
+export async function expandFrontier(bases, usedNames, ourTags, neighbors = 20) {
+  const used = new Set(usedNames.map((n) => n.toLowerCase()));
+  const specific = (ts) => ts.filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).map((t) => t.toLowerCase());
+  const our = new Set(specific(ourTags));
+  const rankedLists = await Promise.all(
+    bases.map(async (base) => {
+      if (!base.appid) return [];
+      const [mlt, baseSpy] = await Promise.all([
+        fetchMoreLikeThis(base.appid, neighbors).catch(() => []),
+        fetchSteamSpy(base.appid).catch(() => null),
+      ]);
+      let baseTags = baseSpy?.tags || [];
+      if (!baseTags.length) baseTags = (await fetchStorePageMeta(base.appid).catch(() => ({ tags: [] }))).tags;
+      const target = new Set([...our, ...specific(baseTags)]);
+      const scored = await Promise.all(
+        mlt.map(async (c) => {
+          if (used.has(c.name.toLowerCase())) return null;
+          // SteamSpy has no tags for tiny games — fall back to store-page tags.
+          let tags = (await fetchSteamSpy(c.appid).catch(() => null))?.tags || [];
+          if (!tags.length) tags = (await fetchStorePageMeta(c.appid).catch(() => ({ tags: [] }))).tags;
+          if (!tags.length) return null;
+          const overlap = specific(tags).filter((t) => target.has(t)).length;
+          return overlap >= 3 ? { appid: c.appid, name: c.name, overlap } : null;
+        })
+      );
+      return scored.filter(Boolean).sort((a, b) => b.overlap - a.overlap);
+    })
+  );
+  const seen = new Set();
+  return rankedLists
+    .map((list) => list.find((c) => !seen.has(c.name.toLowerCase()) && seen.add(c.name.toLowerCase())))
+    .filter(Boolean);
+}
+
 // Other titles by the same developer/publisher — handy context for users.
 async function fetchRelatedByCreator(name, excludeAppid) {
   if (!name) return [];
@@ -151,27 +188,14 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
     const seen = new Set(similar.map((g) => String(g.appid)));
     similar = [...similar, ...tagSims.filter((g) => !seen.has(String(g.appid)))];
   }
-  // Second-order expansion: for each similar game, pull ITS neighbors and keep
-  // the ones sharing >=5 of our tags. Widens the creator-search net.
-  const tagSet = new Set(tags.map((t) => t.toLowerCase()));
-  const have = new Set([String(appid), ...similar.map((g) => String(g.appid))]);
-  const extras = new Map();
+  similar = similar.slice(0, 12);
+  // Each base game's defining tags — shown on its card and used by expansion.
   await Promise.all(
-    similar.slice(0, 6).map(async (g) => {
-      const mlt = await fetchMoreLikeThis(g.appid, 8).catch(() => []);
-      await Promise.all(
-        mlt.map(async (c) => {
-          if (have.has(String(c.appid)) || extras.has(String(c.appid))) return;
-          const spy = await fetchSteamSpy(c.appid).catch(() => null);
-          if (!spy) return;
-          if (spy.tags.filter((t) => tagSet.has(t.toLowerCase())).length >= 5) {
-            extras.set(String(c.appid), { appid: c.appid, name: c.name, img: c.img });
-          }
-        })
-      );
+    similar.map(async (g) => {
+      const spy = await fetchSteamSpy(g.appid).catch(() => null);
+      g.topTags = (spy?.tags || []).filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).slice(0, 4);
     })
   );
-  similar = similar.slice(0, 12);
   const dev = details.developers[0], pub = details.publishers[0];
   const [devGames, pubGames] = await Promise.all([
     fetchRelatedByCreator(dev, appid),
@@ -186,7 +210,6 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
         ? Math.round((spy.positive / (spy.positive + spy.negative)) * 100)
         : null,
     similarGames: similar,
-    expandedGames: [...extras.values()],
     relatedByDeveloper: devGames,
     relatedByPublisher: pubGames,
     headerImage: page.image,

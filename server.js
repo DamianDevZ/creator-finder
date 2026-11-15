@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { Cache } from './src/cache.js';
 import { SupaCache } from './src/sbcache.js';
 import { YouTube } from './src/youtube.js';
-import { buildFingerprint } from './src/steam.js';
+import { buildFingerprint, expandFrontier } from './src/steam.js';
 import { findCreators } from './src/pipeline.js';
 import { aiNotesBatch } from './src/gemini.js';
 import { PRIVACY_MD, TERMS_MD } from './src/legal.js';
@@ -112,7 +112,8 @@ const HTML = `<!DOCTYPE html>
   .gcard{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--panel2);transition:.15s}
   .gcard:hover{border-color:#3a527a;transform:translateY(-2px)}
   .gcard img{width:100%;object-fit:cover;display:block;background:var(--line)}
-  .gcard .gname{padding:7px 10px;font-size:12.5px;font-weight:600;line-height:1.3;min-height:36px}
+  .gcard .gname{padding:7px 10px 3px;font-size:12.5px;font-weight:600;line-height:1.3;min-height:32px}
+  .gcard .gtags{padding:0 10px 8px;font-size:10px;color:var(--dim);line-height:1.4;min-height:14px}
   .gcard .x{position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);color:var(--bad);display:none;align-items:center;justify-content:center;cursor:pointer;font-size:14px;line-height:1}
   .gcard:hover .x{display:flex}
   .addcard{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:10px;color:var(--dim);cursor:pointer;font-size:13px;min-height:100px;transition:.15s}
@@ -301,13 +302,8 @@ const HTML = `<!DOCTYPE html>
     </div>
 
     <div class="panel">
-      <div class="seclabel" style="margin-top:0">Tags — used to find more games like the ones above</div>
-      <div class="tagbox" id="tagbox">
-        <div class="addbox" style="flex:1;display:flex">
-          <input id="addtag" placeholder="Search Steam tags…" autocomplete="off" style="flex:1">
-          <div class="dd" id="tagdd" style="display:none"></div>
-        </div>
-      </div>
+      <div class="seclabel" style="margin-top:0">Tag profile — derived from the games above; edit the games to change it</div>
+      <div class="tagbox" id="tagbox" style="cursor:default"></div>
     </div>
 
     <div class="panel">
@@ -355,38 +351,39 @@ const HTML = `<!DOCTYPE html>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
-const simMap = new Map(), tagSet = new Set();
+const simMap = new Map();
+let fpTags = [];
 
-function renderChips(kind) {
-  if (kind === 'sim') {
-    const el = $('simchips');
-    el.querySelectorAll('.gcard').forEach(c => c.remove());
-    $('addcardbtn').style.display = simMap.size >= 12 ? 'none' : '';
-    for (const [name, v] of simMap) {
-      const d = document.createElement('div');
-      d.className = 'gcard';
-      const src = v?.img || (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_184x69.jpg' : null);
-      if (src) {
-        const im = document.createElement('img');
-        im.src = src;
-        im.onerror = () => im.remove();
-        im.onload = () => { im.style.aspectRatio = im.naturalWidth + '/' + im.naturalHeight; };
-        d.appendChild(im);
-      }
-      d.insertAdjacentHTML('beforeend', '<div class="gname">' + name + '</div><span class="x">&times;</span>');
-      d.querySelector('.x').onclick = (e) => { e.stopPropagation(); simMap.delete(name); renderChips('sim'); };
-      el.insertBefore(d, $('addcardbtn'));
+// Tag profile = the game's own tags + every base game's defining tags.
+// Derived, not editable — change the game list to change the profile.
+const derivedTags = () => {
+  const s = new Set(fpTags);
+  for (const [, v] of simMap) (v?.tags || []).forEach((t) => s.add(t));
+  return [...s];
+};
+function renderTags() {
+  $('tagbox').innerHTML = derivedTags().slice(0, 30).map((t) => '<span class="tag">' + t + '</span>').join('');
+}
+
+function renderChips() {
+  const el = $('simchips');
+  el.querySelectorAll('.gcard').forEach(c => c.remove());
+  $('addcardbtn').style.display = simMap.size >= 12 ? 'none' : '';
+  for (const [name, v] of simMap) {
+    const d = document.createElement('div');
+    d.className = 'gcard';
+    const src = v?.img || (v?.appid ? 'https://cdn.akamai.steamstatic.com/steam/apps/' + v.appid + '/capsule_184x69.jpg' : null);
+    if (src) {
+      const im = document.createElement('img');
+      im.src = src;
+      im.onerror = () => im.remove();
+      im.onload = () => { im.style.aspectRatio = im.naturalWidth + '/' + im.naturalHeight; };
+      d.appendChild(im);
     }
-  } else {
-    const box = $('tagbox');
-    box.querySelectorAll('.tag').forEach(t => t.remove());
-    for (const t of tagSet) {
-      const d = document.createElement('span');
-      d.className = 'tag';
-      d.innerHTML = t + ' <span class="x">&times;</span>';
-      d.querySelector('.x').onclick = () => { tagSet.delete(t); renderChips('tag'); };
-      box.insertBefore(d, box.lastElementChild);
-    }
+    d.insertAdjacentHTML('beforeend', '<div class="gname">' + name + '</div>'
+      + '<div class="gtags">' + (v?.tags || []).slice(0, 3).join(' · ') + '</div><span class="x">&times;</span>');
+    d.querySelector('.x').onclick = (e) => { e.stopPropagation(); simMap.delete(name); renderChips(); renderTags(); };
+    el.insertBefore(d, $('addcardbtn'));
   }
 }
 $('addcardbtn').onclick = () => {
@@ -417,7 +414,18 @@ $('addcardbtn').onclick = () => {
         const lbl = document.createElement('span');
         lbl.textContent = it.name;
         d.append(img, lbl);
-        d.onclick = () => { if (simMap.size >= 12) { dd.style.display = 'none'; resetAddCard(); return; } simMap.set(it.name, { appid: it.appid, img: it.img }); renderChips('sim'); dd.style.display = 'none'; resetAddCard(); };
+        d.onclick = () => {
+          if (simMap.size >= 12) { dd.style.display = 'none'; resetAddCard(); return; }
+          simMap.set(it.name, { appid: it.appid, img: it.img, tags: [] });
+          renderChips(); renderTags();
+          dd.style.display = 'none'; resetAddCard();
+          // Fill in the new base game's own defining tags in the background.
+          fetch('/api/fingerprint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: it.appid }) })
+            .then((r) => r.json()).then((j) => {
+              const v = simMap.get(it.name);
+              if (v) { v.tags = (j.tags || []).slice(0, 4); renderChips(); renderTags(); }
+            }).catch(() => {});
+        };
         grid.appendChild(d);
       }
       dd.style.display = items.length ? 'block' : 'none';
@@ -461,7 +469,6 @@ function autocomplete(inputId, ddId, endpoint, onPick) {
   };
   inp.onblur = () => setTimeout(() => dd.style.display = 'none', 200);
 }
-autocomplete('addtag', 'tagdd', '/api/search-tags', (t) => { tagSet.add(t); renderChips('tag'); });
 
 // Main bar: typing a name (not a URL/appid) searches Steam directly.
 (() => {
@@ -516,10 +523,10 @@ $('load').onclick = async () => {
     img.onload = () => { img.style.display = 'block'; };
     img.src = j.headerImage || 'https://cdn.akamai.steamstatic.com/steam/apps/' + j.appid + '/header.jpg';
   }
-  simMap.clear(); tagSet.clear();
-  j.similarGames.forEach(g => simMap.set(g.name, String(g.appid).startsWith('manual') ? null : { appid: g.appid, img: g.img || null }));
-  j.tags.slice(0, 12).forEach(t => tagSet.add(t));
-  renderChips('sim'); renderChips('tag');
+  simMap.clear();
+  fpTags = (j.tags || []).slice(0, 20);
+  j.similarGames.forEach(g => simMap.set(g.name, String(g.appid).startsWith('manual') ? null : { appid: g.appid, img: g.img || null, tags: g.topTags || [] }));
+  renderChips(); renderTags();
 };
 
 function renderRelated(elId, creator, games) {
@@ -624,7 +631,7 @@ $('go').onclick = async () => {
   $('status').innerHTML = '<span class="spinner"></span>Scanning YouTube… usually 30–60s on a cold run.';
   const body = {
     input: $('link').value,
-    similar: [...simMap.keys()].join(','), tags: [...tagSet].join(','),
+    similar: [...simMap.keys()].join(','), tags: derivedTags().join(','),
     minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0, maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
     top: +$('top').value || 30, deep: true, hidedev: true,
     emailonly: true,
@@ -639,7 +646,7 @@ $('go').onclick = async () => {
   lastResults = j.results;
   lastGame = j.game;
   lastInput = $('link').value;
-  expandQueue = j.expansion || [];
+  expandDone = false;
   usedGameNames = new Set([j.game, ...simMap.keys()].map((n) => n.toLowerCase()));
   // Refresh this game's candidate pool (lists are never auto-created).
   pools[j.game] = {};
@@ -652,25 +659,30 @@ $('go').onclick = async () => {
   maybeExpand();
 };
 
-// Rolling expansion: when the unscored backup pool drops below 5, silently
-// scan the next batch of tag-matched games and merge new candidates in.
+// Rolling expansion: whenever the unreviewed queue drops below 20, pull the
+// next frontier round — each of the 12 base games contributes its best unused
+// >=3-tag neighbor — scan those games, merge candidates, repeat until either
+// the queue is back to 20 or the frontier runs dry.
 async function maybeExpand() {
-  if (expanding || !lastGame || !expandQueue.length) return;
+  if (expanding || !lastGame || expandDone) return;
   const pool = poolFor(lastGame);
   const left = Object.values(pool).filter((r) => !((lists[activeList] && lists[activeList].verdicts) || {})[r.channelId]).length;
-  if (left > 15) return;
-  const batch = [];
-  while (batch.length < 5 && expandQueue.length) {
-    const n = expandQueue.shift();
-    if (!usedGameNames.has(n.toLowerCase())) { usedGameNames.add(n.toLowerCase()); batch.push(n); }
-  }
-  if (!batch.length) return;
+  if (left >= 20) return;
   expanding = true;
   try {
+    const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
+    const er = await fetch('/api/expand-games', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags() }),
+    });
+    const ej = await er.json();
+    const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
+    batch.forEach((g) => usedGameNames.add(g.name.toLowerCase()));
+    if (!batch.length) { expandDone = true; expanding = false; updTabs(); return; }
     const res = await fetch('/api/find', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        input: lastInput, similar: batch.join(','), tags: [...tagSet].join(','), expand: true,
+        input: lastInput, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
         minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
         maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
         top: 400, deep: true, hidedev: true, emailonly: true,
@@ -682,7 +694,6 @@ async function maybeExpand() {
       const pool = (pools[j.game] ||= {});
       for (const r of j.results) if (!pool[r.channelId]) pool[r.channelId] = snap(r);
       savePools();
-      expandQueue.push(...(j.expansion || []));
       if (j.notesId) pollNotes(j.notesId);
       updTabs();
     }
@@ -704,7 +715,7 @@ for (const [n, l] of Object.entries(lists)) {
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
-let lastInput = '', expandQueue = [], usedGameNames = new Set(), expanding = false;
+let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false;
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -1073,6 +1084,11 @@ export const handler = async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/search-tags') {
       return json(200, await searchTags(url.searchParams.get('term') || ''));
     }
+    if (req.method === 'POST' && url.pathname === '/api/expand-games') {
+      const b = await readBody(req);
+      const picks = await expandFrontier(b.base || [], b.used || [], list(b.tags));
+      return json(200, { names: picks });
+    }
     if (req.method === 'POST' && url.pathname === '/api/fingerprint') {
       const b = await readBody(req);
       return json(200, await buildFingerprint(b.input, { manualTags: list(b.tags) }));
@@ -1111,7 +1127,7 @@ export const handler = async (req, res) => {
           });
         setTimeout(() => notesJobs.delete(notesId), 10 * 60 * 1000);
       }
-      return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId, expansion: (fp.expandedGames || []).map((g) => g.name) });
+      return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId });
     }
     if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
       const md = url.pathname === '/privacy' ? PRIVACY_MD : TERMS_MD;
