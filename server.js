@@ -6,6 +6,7 @@ import { YouTube } from './src/youtube.js';
 import { buildFingerprint } from './src/steam.js';
 import { findCreators } from './src/pipeline.js';
 import { aiNotesBatch } from './src/gemini.js';
+import { PRIVACY_MD, TERMS_MD } from './src/legal.js';
 
 function loadEnv() {
   try {
@@ -18,7 +19,7 @@ function loadEnv() {
 loadEnv();
 
 const PORT = 3456;
-const cache = new Cache('cache.json');
+const cache = new Cache(process.env.VERCEL ? '/tmp/creator-finder-cache.json' : 'cache.json');
 const yt = new YouTube(process.env.YOUTUBE_API_KEY, cache);
 const notesJobs = new Map();
 const DAY = 24 * 60 * 60 * 1000;
@@ -552,7 +553,7 @@ const readBody = async (req) => {
   return JSON.parse(b);
 };
 
-createServer(async (req, res) => {
+export const handler = async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const json = (code, obj) => {
     res.writeHead(code, { 'Content-Type': 'application/json' });
@@ -605,7 +606,7 @@ createServer(async (req, res) => {
       return json(200, { game: fp.name, queries: queries.length, channelCount, results, notesId });
     }
     if (req.method === 'GET' && (url.pathname === '/privacy' || url.pathname === '/terms')) {
-      const md = readFileSync(url.pathname === '/privacy' ? 'PRIVACY.md' : 'TERMS.md', 'utf8');
+      const md = url.pathname === '/privacy' ? PRIVACY_MD : TERMS_MD;
       res.writeHead(200, { 'Content-Type': 'text/html' });
       return res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder</title>
 <style>body{background:#0b0e14;color:#c8d0e0;font:15px/1.7 system-ui;max-width:720px;margin:40px auto;padding:0 20px}h1{color:#fff}a{color:#7c8cf8}</style></head>
@@ -620,4 +621,10 @@ createServer(async (req, res) => {
   } catch (e) {
     json(500, { error: e.message });
   }
-}).listen(PORT, () => console.log(`http://localhost:${PORT}`));
+};
+
+export default handler;
+
+if (!process.env.VERCEL) {
+  createServer(handler).listen(PORT, () => console.log(`http://localhost:${PORT}`));
+}
