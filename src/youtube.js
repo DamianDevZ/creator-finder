@@ -58,23 +58,16 @@ export class YouTube {
   // videos: cached 30 days (view counts on uploads age slowly).
   // channels: cached 7 days (sub counts drift slowly).
   async #byId(kind, endpoint, part, ids, ttlMs) {
-    const out = new Map();
-    const missing = [];
-    for (const id of ids) {
-      const hit = this.cache.get(`${kind}:${id}`, ttlMs);
-      if (hit) out.set(id, hit);
-      else missing.push(id);
-    }
+    const out = await this.cache.getMany(ids.map((id) => `${kind}:${id}`), ttlMs);
+    const missing = ids.filter((id) => !out.has(`${kind}:${id}`));
     for (let i = 0; i < missing.length; i += 50) {
       const batch = missing.slice(i, i + 50);
       const j = await this.get(endpoint, { part, id: batch.join(','), maxResults: 50 });
-      for (const item of j.items || []) {
-        this.cache.set(`${kind}:${item.id}`, item);
-        out.set(item.id, item);
-      }
+      this.cache.setMany((j.items || []).map((item) => [`${kind}:${item.id}`, item]));
+      for (const item of j.items || []) out.set(`${kind}:${item.id}`, item);
     }
     this.cache.save();
-    return ids.map((id) => out.get(id)).filter(Boolean);
+    return ids.map((id) => out.get(`${kind}:${id}`)).filter(Boolean);
   }
 
   async videos(videoIds) {

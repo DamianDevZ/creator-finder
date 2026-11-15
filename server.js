@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { Cache } from './src/cache.js';
+import { SupaCache } from './src/sbcache.js';
 import { YouTube } from './src/youtube.js';
 import { buildFingerprint } from './src/steam.js';
 import { findCreators } from './src/pipeline.js';
@@ -19,7 +20,10 @@ function loadEnv() {
 loadEnv();
 
 const PORT = 3456;
-const cache = new Cache(process.env.VERCEL ? '/tmp/creator-finder-cache.json' : 'cache.json');
+const cache =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY
+    ? new SupaCache(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+    : new Cache(process.env.VERCEL ? '/tmp/creator-finder-cache.json' : 'cache.json');
 const yt = new YouTube(process.env.YOUTUBE_API_KEY, cache);
 const notesJobs = new Map();
 const DAY = 24 * 60 * 60 * 1000;

@@ -21,8 +21,21 @@ export class Cache {
     return e.v;
   }
 
+  async getMany(keys, ttlMs = DEFAULT_TTL_MS) {
+    const out = new Map();
+    for (const k of keys) {
+      const v = this.get(k, ttlMs);
+      if (v !== null) out.set(k, v);
+    }
+    return out;
+  }
+
   set(key, value) {
     this.data[key] = { t: Date.now(), v: value };
+  }
+
+  setMany(entries) {
+    for (const [k, v] of entries) this.set(k, v);
   }
 
   async wrap(key, fn, ttlMs) {
