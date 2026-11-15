@@ -186,6 +186,10 @@ const HTML = `<!DOCTYPE html>
   .notes-cell>div{min-height:60px;display:flex;flex-direction:column;justify-content:center}
   /* --- lists & triage --- */
   .listbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .lpick{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:6px 10px;font-size:12.5px;outline:none;max-width:180px}
+  .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
+  .lmbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .lmbox input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none}
   .listbar select,.listbar input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none}
   .vbtns{display:flex;gap:6px}
   .vb{border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:600}
@@ -324,6 +328,18 @@ const HTML = `<!DOCTYPE html>
   <div id="status"></div>
   <div id="out"></div>
   <div id="lists"></div>
+
+  <div id="lmodal" class="lmodal" style="display:none">
+    <div class="lmbox">
+      <div style="font-weight:700;margin-bottom:4px">Create a list</div>
+      <div class="meta" style="font-size:11.5px;margin-bottom:12px">Verdicts need a list to live in.</div>
+      <input id="lmname" placeholder="e.g. Release outreach" autocomplete="off">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="ltab" data-act="lmcancel">Cancel</button>
+        <button class="btn" data-act="lmcreate" style="padding:8px 18px;font-size:13px">Create</button>
+      </div>
+    </div>
+  </div>
 
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
@@ -618,11 +634,12 @@ $('go').onclick = async () => {
   let gameList = Object.keys(lists).find((n) => lists[n].game === j.game);
   if (!gameList) {
     gameList = j.game + ' General';
-    lists[gameList] = { game: j.game, verdicts: {}, channels: {}, pool: {} };
+    lists[gameList] = { game: j.game, verdicts: {}, channels: {} };
   }
   // Refresh this game's candidate pool from the scan (verdicts persist).
-  lists[gameList].pool = {};
-  for (const r of j.results) lists[gameList].pool[r.channelId] = snap(r);
+  pools[j.game] = {};
+  for (const r of j.results) pools[j.game][r.channelId] = snap(r);
+  savePools();
   saveLists();
   if (!activeList) activeList = gameList;
   triageTab = 'queue';
@@ -632,10 +649,17 @@ $('go').onclick = async () => {
 
 // ============ LISTS (guest mode, localStorage; Supabase sync later) ============
 const LKEY = 'cf_lists';
-let lists = {};
+const PKEY = 'cf_pools';
+let lists = {}, pools = {};
 try { lists = JSON.parse(localStorage.getItem(LKEY)) || {}; } catch { lists = {}; }
+try { pools = JSON.parse(localStorage.getItem(PKEY)) || {}; } catch { pools = {}; }
+// migrate pools that lived inside lists
+for (const [n, l] of Object.entries(lists)) {
+  if (l.pool) { pools[l.game] = { ...(pools[l.game] || {}), ...l.pool }; delete l.pool; }
+}
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
-let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '';
+const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
+let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null;
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -643,14 +667,15 @@ const snap = (r) => ({
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
   vidTitles: r.vidTitles || [],
 });
-const queueFor = (l) => Object.values(lists[l].pool || {}).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
+const poolFor = (game) => pools[game] || {};
+const queueFor = (l) => Object.values(poolFor(lists[l].game)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
 function verdict(listName, cid, v) {
   const l = lists[listName];
   if (!l) return;
-  l.verdicts ||= {}; l.channels ||= {}; l.pool ||= {};
+  l.verdicts ||= {}; l.channels ||= {};
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
-  const r = l.pool[cid] || lastResults.find((x) => x.channelId === cid);
+  const r = poolFor(l.game)[cid] || lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
   saveLists();
   renderLists();
@@ -727,29 +752,49 @@ function renderNav() {
 function renderLists() {
   const el = $('lists');
   $('viewtitle').textContent = activeList || 'Creator Finder';
-  if (!lastResults.length && !Object.keys(lists).length) { el.innerHTML = ''; renderNav(); return; }
   renderNav();
-
-  renderNav();
-  // --- no active list: nav drives selection; panel hidden ---
-  if (!activeList) { el.innerHTML = ''; return; }
-
-  const l = lists[activeList];
-  if (!l) { activeList = null; renderLists(); return; }
-  l.verdicts ||= {}; l.channels ||= {};
-  const acc = Object.entries(l.verdicts).filter(([, v]) => v === 'a').map(([c]) => c);
-  const rej = Object.entries(l.verdicts).filter(([, v]) => v === 'r').map(([c]) => c);
-  const queue = queueFor(activeList).slice(qi);
+  const l = activeList ? lists[activeList] : null;
+  const game = (l && l.game) || lastGame || '';
+  if (!game && !Object.keys(lists).length) { el.innerHTML = ''; return; }
+  const pool = poolFor(game);
+  const gameLists = Object.keys(lists).filter((n) => lists[n].game === game);
+  const acc = l ? Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => c) : [];
+  const rej = l ? Object.entries(l.verdicts || {}).filter(([, v]) => v === 'r').map(([c]) => c) : [];
+  const queue = Object.values(pool).filter((r) => !((l && l.verdicts) || {})[r.channelId]).slice(qi);
   const shown = triageMode === 'detailed' ? queue.slice(0, 3) : queue.slice(0, 10);
 
   let body = '<div class="listbar" style="margin-bottom:14px">'
-    + '<b>' + esc(activeList) + '</b><span class="meta">' + esc(l.game) + '</span>'
-    + '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
-    + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
-    + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+    + '<b>' + esc(game || 'Lists') + '</b>'
+    + '<select id="listpick" class="lpick">'
+    + '<option value="">' + (gameLists.length ? 'Select list…' : 'No lists yet') + '</option>'
+    + gameLists.map((n) => '<option value="' + esc(n) + '"' + (n === activeList ? ' selected' : '') + '>' + esc(n) + '</option>').join('')
+    + '<option value="__new">+ New list…</option></select>'
+    + (l
+      ? '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
+      + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
+      + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+      : '<span class="meta" style="font-size:12px">' + queue.length + ' candidates — pick a list to triage into</span>')
     + '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>'
-    + '<button class="ltab" data-act="closelist">Done</button>'
+    + (l ? '<button class="ltab" data-act="closelist">Done</button>' : '')
     + '</div>';
+
+  if (!l) {
+    if (!queue.length) {
+      body += '<div class="meta" style="padding:24px;text-align:center">No candidates — run a scan first.</div>';
+      el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
+      return;
+    }
+    body += triageMode === 'detailed'
+      ? shown.map((r) => detailCard(r,
+        '<button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
+        + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>')).join('')
+      : qTable(shown, 100, (r) =>
+        '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
+        + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>');
+    el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
+    return;
+  }
+  l.verdicts ||= {}; l.channels ||= {};
 
   if (triageTab === 'queue') {
     if (!shown.length) {
@@ -789,6 +834,12 @@ document.addEventListener('click', (e) => {
     if (!lists[name]) lists[name] = { game: lastGame, verdicts: {}, channels: {} };
     activeList = name; triageTab = 'queue'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
+    if (!activeList) {
+      pendingVerdict = { cid: b.dataset.cid, v: b.dataset.v || null };
+      $('lmodal').style.display = 'flex';
+      setTimeout(() => $('lmname').focus(), 50);
+      return;
+    }
     const row = b.closest('tr, .qcard2, .qrow');
     if (row) {
       row.classList.add('fadeout');
@@ -796,6 +847,17 @@ document.addEventListener('click', (e) => {
     } else {
       verdict(activeList, b.dataset.cid, b.dataset.v || null);
     }
+  } else if (act === 'lmcreate') {
+    const name = $('lmname').value.trim();
+    if (!name) return;
+    if (!lists[name]) lists[name] = { game: lastGame || 'General', verdicts: {}, channels: {} };
+    activeList = name; triageTab = 'queue'; qi = 0;
+    $('lmodal').style.display = 'none'; $('lmname').value = '';
+    saveLists();
+    const pv = pendingVerdict; pendingVerdict = null;
+    if (pv) verdict(activeList, pv.cid, pv.v); else renderLists();
+  } else if (act === 'lmcancel') {
+    $('lmodal').style.display = 'none'; pendingVerdict = null;
   } else if (act === 'tab') {
     triageTab = b.dataset.v; renderLists();
   } else if (act === 'mode') {
@@ -832,8 +894,24 @@ document.addEventListener('click', (e) => {
   }
 });
 
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'listpick') return;
+  const v = e.target.value;
+  if (v === '__new') {
+    pendingVerdict = null;
+    $('lmodal').style.display = 'flex';
+    setTimeout(() => $('lmname').focus(), 50);
+  } else {
+    activeList = v || null; triageTab = 'queue'; qi = 0; renderLists();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
+  if (e.target.id === 'lmname') {
+    e.target.closest('.lmbox').querySelector('[data-act="lmcreate"]').click();
+    return;
+  }
   if (e.target.id === 'navlistname') {
     const name = e.target.value.trim();
     if (!name) return;
