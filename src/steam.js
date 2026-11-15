@@ -146,6 +146,27 @@ export async function buildFingerprint(input, { manualTags = [] } = {}) {
   // Similarity priority: Steam's own More-Like-This > tag overlap
   let similar = await fetchMoreLikeThis(appid);
   if (!similar.length) similar = await fetchSimilarGames(appid, tags);
+  // Second-order expansion: for each similar game, pull ITS neighbors and keep
+  // the ones sharing >=5 of our tags. Widens the creator-search net.
+  const tagSet = new Set(tags.map((t) => t.toLowerCase()));
+  const have = new Set([String(appid), ...similar.map((g) => String(g.appid))]);
+  const extras = new Map();
+  await Promise.all(
+    similar.slice(0, 6).map(async (g) => {
+      const mlt = await fetchMoreLikeThis(g.appid, 8).catch(() => []);
+      await Promise.all(
+        mlt.map(async (c) => {
+          if (have.has(String(c.appid)) || extras.has(String(c.appid))) return;
+          const spy = await fetchSteamSpy(c.appid).catch(() => null);
+          if (!spy) return;
+          if (spy.tags.filter((t) => tagSet.has(t.toLowerCase())).length >= 5) {
+            extras.set(String(c.appid), { appid: c.appid, name: c.name, img: c.img });
+          }
+        })
+      );
+    })
+  );
+  similar = [...similar, ...extras.values()].slice(0, 24);
   const dev = details.developers[0], pub = details.publishers[0];
   const [devGames, pubGames] = await Promise.all([
     fetchRelatedByCreator(dev, appid),

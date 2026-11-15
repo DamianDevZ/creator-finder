@@ -293,7 +293,7 @@ const HTML = `<!DOCTYPE html>
     </div>
 
     <div class="panel">
-      <div class="seclabel" style="margin-top:0">Similar games — creators covering these will be found</div>
+      <div class="seclabel" style="margin-top:0">Creators covering these or similar games will be found</div>
       <div class="gamegrid" id="simchips">
         <div class="addcard" id="addcardbtn">+ Add game</div>
       </div>
@@ -301,7 +301,7 @@ const HTML = `<!DOCTYPE html>
     </div>
 
     <div class="panel">
-      <div class="seclabel" style="margin-top:0">Tags — used to refine the profile</div>
+      <div class="seclabel" style="margin-top:0">Tags — used to find more games like the ones above</div>
       <div class="tagbox" id="tagbox">
         <div class="addbox" style="flex:1;display:flex">
           <input id="addtag" placeholder="Search Steam tags…" autocomplete="off" style="flex:1">
@@ -317,16 +317,18 @@ const HTML = `<!DOCTYPE html>
         <div class="ctl"><span>Max subs</span><input id="maxsubs" value="500000"></div>
         <input type="hidden" id="top" value="400">
         <input type="hidden" id="deep" checked>
-        <label class="ctl switch" title="Only show channels where we found an email"><input type="checkbox" id="emailonly"><span class="sw"></span><span style="text-transform:none;font-size:12px">Has email</span></label>
+        <label class="ctl switch" title="Only show channels where we found an email"><input type="checkbox" id="emailonly" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">Has email</span></label>
         <input type="hidden" id="devonly" value="on">
-        <label class="ctl switch" title="Rewrite notes with AI (needs GEMINI_API_KEY)"><input type="checkbox" id="ainotes"><span class="sw"></span><span style="text-transform:none;font-size:12px">AI notes</span></label>
-        <label class="ctl switch" title="Quota-free search via yt-dlp. Local testing only — not for the deployed app."><input type="checkbox" id="dlp"><span class="sw"></span><span style="text-transform:none;font-size:12px">yt-dlp</span></label>
+        <label class="ctl switch" title="Rewrite notes with AI (needs GEMINI_API_KEY)"><input type="checkbox" id="ainotes" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">Notes</span></label>
+        <label class="ctl switch" title="Quota-free search via yt-dlp. Local testing only — not for the deployed app."><input type="checkbox" id="dlp" checked><span class="sw"></span><span style="text-transform:none;font-size:12px">yt-dlp</span></label>
         <div class="ctl" style="position:relative"><span>Language</span>
           <input type="hidden" id="langfilter" value="English">
           <div class="dd-btn" id="langbtn" style="cursor:pointer;display:flex;align-items:center;gap:6px">English <span style="font-size:9px;color:var(--dim)">▾</span></div>
           <div class="dd-menu" id="langmenu"></div>
         </div>
-        <button class="btn" id="go" style="margin-left:auto;align-self:center">Find creators</button>
+      </div>
+      <div style="display:flex;justify-content:center;margin-top:14px">
+        <button class="btn" id="go" style="padding:11px 34px;font-size:14px">Find creators</button>
       </div>
     </div>
   </div>
