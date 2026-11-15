@@ -670,7 +670,7 @@ async function maybeExpand() {
     const res = await fetch('/api/find', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        input: lastInput, similar: batch.join(','), tags: [...tagSet].join(','),
+        input: lastInput, similar: batch.join(','), tags: [...tagSet].join(','), expand: true,
         minsubs: +$('minsubs').value.replace(/[^\d]/g, '') || 0,
         maxsubs: +$('maxsubs').value.replace(/[^\d]/g, '') || null,
         top: 400, deep: true, hidedev: true, emailonly: true,
@@ -765,7 +765,6 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Type</div><div class="qc-val">' + esc((r.notes || []).join(' · ')) + '</div>'
     + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
@@ -780,14 +779,13 @@ function qRow(r, btns) {
     + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
     + '<td class="num">' + fmt(r.subs) + '</td>'
     + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
-    + '<td><div class="qnotes">' + (r.notes || []).map(esc).join('<br>') + '</div></td>'
     + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
     + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
 }
 
 function qTable(rows, lastW, btns) {
   return '<table class="qt">'
-    + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Type</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
+    + '<tr><th style="width:56px">Score</th><th>Channel</th><th style="width:70px">Subs</th><th style="width:78px">Language</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
     + rows.map((r) => qRow(r, btns)).join('') + '</table>';
 }
 
@@ -1095,7 +1093,7 @@ export const handler = async (req, res) => {
         (!b.hidedev || r.niche !== 'Dev/studio') &&
         (!b.lang || b.lang === 'any' || (r.language || 'English') === b.lang)
       );
-      results = results.slice(0, b.top || 30);
+      results = results.slice(0, b.expand ? (b.top || 400) : 20);
       // Optional AI-written notes — runs in background so the table renders instantly.
       let notesId = null;
       if (b.ainotes && process.env.GEMINI_API_KEY && results.length) {
