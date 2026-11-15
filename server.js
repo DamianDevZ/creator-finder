@@ -82,7 +82,7 @@ const HTML = `<!DOCTYPE html>
   .navmenu .mi.danger{color:var(--bad)}
   .navadd{width:100%;margin-top:8px;padding:7px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--dim);font-size:12px;cursor:pointer}
   .navadd:hover{color:var(--txt);border-color:var(--dim)}
-  .navguest{margin-top:auto;padding:12px 8px;border-top:1px solid var(--line)}
+  .navguest{padding:12px 8px;margin-bottom:18px;border-bottom:1px solid var(--line)}
   .navacct{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
   .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
   .navacct.ghost:hover{border-color:var(--dim)}
@@ -219,11 +219,12 @@ const HTML = `<!DOCTYPE html>
   .qstat{flex:1;background:var(--bg3);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
   .qstat .qs-l{font-size:10px;letter-spacing:.6px;color:var(--dim);text-transform:uppercase;font-weight:700}
   .qstat .qs-v{font-size:15px;font-weight:700;margin-top:4px}
-  .qc-rows{display:grid;grid-template-columns:64px 1fr;row-gap:9px;font-size:12.5px;margin-bottom:14px}
+  .qc-low{display:grid;grid-template-columns:3fr 1fr;gap:12px}
+  .qc-rows{display:grid;grid-template-columns:64px 1fr;row-gap:9px;font-size:12.5px;align-content:start}
   .qc-lbl{color:var(--dim);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding-top:1px}
   .qc-val{color:var(--txt);line-height:1.55}
-  .qc-act{display:flex;gap:10px;justify-content:flex-end}
-  .vb.big{padding:12px 26px;font-size:13.5px;border-radius:10px;min-width:110px}
+  .qc-act{align-self:end;display:flex;gap:8px}
+  .vb.big{flex:1;padding:12px 0;font-size:13px;border-radius:10px;min-width:0}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -235,12 +236,6 @@ const HTML = `<!DOCTYPE html>
 <div class="shell">
 <aside id="nav">
   <div class="navlogo"><b>CREATOR</b>FINDER</div>
-  <div class="navsec">LISTS</div>
-  <div id="navlists"></div>
-  <button class="navadd" data-act="newlist">+ New list</button>
-  <div id="newlistbox" style="display:none;margin-top:8px">
-    <input id="navlistname" placeholder="List name…" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;outline:none">
-  </div>
   <div class="navguest">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <div style="width:30px;height:30px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--dim)">G</div>
@@ -249,10 +244,18 @@ const HTML = `<!DOCTYPE html>
     <button class="navacct" data-act="acct">Create account</button>
     <button class="navacct ghost" data-act="acct">Log in</button>
   </div>
+  <div class="navsec">LISTS</div>
+  <div id="navlists"></div>
+  <button class="navadd" data-act="newlist">+ New list</button>
+  <div id="newlistbox" style="display:none;margin-top:8px">
+    <input id="navlistname" placeholder="List name…" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;outline:none">
+  </div>
 </aside>
 <div class="wrap">
-  <div class="logo"><b>CREATOR</b>FINDER</div>
-  <h1>Find creators for your game</h1>
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+    <h1 id="viewtitle">Creator Finder</h1>
+    <button class="ltab" id="backlist" data-act="backlist" style="display:none">← Back to list</button>
+  </div>
   <div class="sub">Paste a Steam link. We profile the game, scan YouTube for channels covering similar titles, and rank who's most likely to say yes.</div>
 
   <div class="searchbar" style="position:relative">
@@ -472,6 +475,7 @@ $('load').onclick = async () => {
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }
   $('status').textContent = '';
   $('base').style.display = 'block';
+  if (activeList) $('backlist').style.display = '';
   $('gametitle').textContent = j.name;
   $('gamemeta').textContent = [(j.developers || []).join(', '), (j.publishers || []).filter(p => !(j.developers || []).includes(p)).join(', ')].filter(Boolean).join(' · ') || j.genres.join(' · ');
   renderRelated('reldev', j.developers?.[0], j.relatedByDeveloper);
@@ -586,6 +590,7 @@ document.addEventListener('click', (e) => {
 $('go').onclick = async () => {
   $('go').disabled = true;
   $('out').innerHTML = '';
+  if (activeList) $('backlist').style.display = '';
   $('status').innerHTML = '<span class="spinner"></span>Scanning YouTube… usually 30–60s on a cold run.';
   const body = {
     input: $('link').value,
@@ -653,6 +658,29 @@ function chanLine(r) {
     + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language || 'English') + '</div></div>';
 }
 
+function detailCard(r, btns) {
+  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+  const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
+  return '<div class="qcard2">'
+    + '<div class="qc-left">' + thumb
+    + '<a class="qc-name" href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a>'
+    + '<div class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</div></div>'
+    + '<div class="qc-main">'
+    + '<div class="qc-stats">'
+    + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
+    + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
+    + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
+    + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
+    + '<div class="qc-low"><div class="qc-rows">'
+    + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
+    + ((r.vidTitles || []).length ? '<div class="qc-lbl">Videos</div><div class="qc-val" style="color:var(--dim)">' + r.vidTitles.slice(0, 3).map(esc).join('<br>') + '</div>' : '')
+    + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+    + '</div>'
+    + '<div class="qc-act">' + btns + '</div>'
+    + '</div></div></div>';
+}
+
 let renaming = null, openMenu = null;
 function renderNav() {
   const names = Object.keys(lists).sort((a, b) => (lists[a].game + a).localeCompare(lists[b].game + b));
@@ -672,6 +700,7 @@ function renderNav() {
 
 function renderLists() {
   const el = $('lists');
+  $('viewtitle').textContent = activeList || 'Creator Finder';
   if (!lastResults.length && !Object.keys(lists).length) { el.innerHTML = ''; renderNav(); return; }
   renderNav();
 
@@ -692,7 +721,7 @@ function renderLists() {
     + '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
     + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
     + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
-    + (triageTab === 'queue' ? '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>' : '')
+    + '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>'
     + '<button class="ltab" data-act="closelist">Done</button>'
     + '</div>';
 
@@ -700,29 +729,9 @@ function renderLists() {
     if (!shown.length) {
       body += '<div class="meta" style="padding:24px;text-align:center">Queue empty — every candidate has a verdict. ' + acc.length + ' accepted, ' + rej.length + ' rejected.</div>';
     } else if (triageMode === 'detailed') {
-      body += shown.map((r) => {
-        const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
-        const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
-        return '<div class="qcard2">'
-          + '<div class="qc-left">' + thumb
-          + '<a class="qc-name" href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a>'
-          + '<div class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</div></div>'
-          + '<div class="qc-main">'
-          + '<div class="qc-stats">'
-          + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
-          + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
-          + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
-          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
-          + '<div class="qc-rows">'
-          + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
-          + '<div class="qc-lbl">About</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
-          + ((r.vidTitles || []).length ? '<div class="qc-lbl">Videos</div><div class="qc-val" style="color:var(--dim)">' + r.vidTitles.slice(0, 3).map(esc).join('<br>') + '</div>' : '')
-          + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
-          + '</div>'
-          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
-          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div>'
-          + '</div></div>';
-      }).join('');
+      body += shown.map((r) => detailCard(r,
+        '<button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
+        + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button>')).join('');
     } else {
       // compact: mini-table — score, channel, subs, language, notes, email, verdict
       body += '<table class="qt">'
@@ -744,13 +753,17 @@ function renderLists() {
   } else {
     const ids = triageTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
+    const moveBtns = (r) =>
+      '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">' + 'Back to queue' + '</button>'
+      + '<button class="vb ' + (triageTab === 'acc' ? 'no' : 'ok') + '" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (triageTab === 'acc' ? 'r' : 'a') + '">' + (triageTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>';
     body += rows.length
-      ? rows.map((r) =>
-        '<div class="qrow">' + chanLine(r)
-        + (triageTab === 'acc' && r.emails.length ? '<div>' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
-        + '<div class="vbtns"><button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (triageTab === 'acc' ? 'r' : 'a') + '">' + (triageTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>'
-        + '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">Back to queue</button></div></div>'
-      ).join('')
+      ? (triageMode === 'detailed'
+        ? rows.map((r) => detailCard(r, moveBtns(r))).join('')
+        : rows.map((r) =>
+          '<div class="qrow">' + chanLine(r)
+          + (triageTab === 'acc' && r.emails.length ? '<div>' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
+          + '<div class="vbtns">' + moveBtns(r) + '</div></div>'
+        ).join(''))
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
   el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
@@ -773,8 +786,14 @@ document.addEventListener('click', (e) => {
     triageMode = triageMode === 'detailed' ? 'compact' : 'detailed'; renderLists();
   } else if (act === 'closelist') {
     activeList = null; renderLists();
+  } else if (act === 'backlist') {
+    $('base').style.display = 'none';
+    $('backlist').style.display = 'none';
+    renderLists();
   } else if (act === 'openlist') {
-    activeList = b.dataset.n; triageTab = 'queue'; qi = 0; openMenu = null; renderLists();
+    activeList = b.dataset.n; triageTab = 'queue'; qi = 0; openMenu = null;
+    $('base').style.display = 'none'; $('backlist').style.display = 'none';
+    renderLists();
   } else if (act === 'itemmenu') {
     e.stopPropagation();
     openMenu = openMenu === b.dataset.n ? null : b.dataset.n; renderNav();
