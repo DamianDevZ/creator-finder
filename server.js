@@ -186,7 +186,13 @@ const HTML = `<!DOCTYPE html>
   .notes-cell>div{min-height:60px;display:flex;flex-direction:column;justify-content:center}
   /* --- lists & triage --- */
   .listbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .lpick{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:6px 10px;font-size:12.5px;outline:none;max-width:180px}
+  .lpbtn{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:8px 14px;font-size:14.5px;font-weight:700;cursor:pointer}
+  .lpbtn:hover{border-color:var(--dim)}
+  .lpbtn .car{font-size:9px;color:var(--dim)}
+  .lpmenu{position:absolute;top:calc(100% + 6px);left:0;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:5px;z-index:80;box-shadow:0 12px 32px rgba(0,0,0,.55);max-height:280px;overflow-y:auto}
+  .lpmi{padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer}
+  .lpmi:hover{background:var(--bg3)}
+  .lpmi.on{color:var(--acc);font-weight:600}
   .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
   .lmbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .lmbox input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none}
@@ -654,7 +660,7 @@ for (const [n, l] of Object.entries(lists)) {
 }
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
-let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null;
+let activeList = null, triageTab = 'queue', triageMode = 'compact', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
 
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
@@ -665,7 +671,7 @@ const snap = (r) => ({
 const poolFor = (game) => pools[game] || {};
 const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
-function verdict(listName, cid, v) {
+function verdict(listName, cid, v, quiet) {
   const l = lists[listName];
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
@@ -673,7 +679,19 @@ function verdict(listName, cid, v) {
   const r = poolFor(lastGame)[cid] || lastResults.find((x) => x.channelId === cid);
   if (r && !l.channels[cid]) l.channels[cid] = snap(r);
   saveLists();
-  renderLists();
+  renderNav();
+  if (!quiet) renderLists();
+}
+
+function updTabs() {
+  const l = lists[activeList];
+  if (!l) return;
+  const cnt = { queue: queueFor(activeList).length, acc: 0, rej: 0 };
+  for (const v of Object.values(l.verdicts || {})) cnt[v === 'a' ? 'acc' : 'rej']++;
+  for (const [k, label] of [['queue', 'Queue'], ['acc', 'Accepted'], ['rej', 'Rejected']]) {
+    const t = $('lists').querySelector('[data-act="tab"][data-v="' + k + '"]');
+    if (t) t.textContent = label + ' (' + cnt[k] + ')';
+  }
 }
 
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
@@ -710,21 +728,23 @@ function detailCard(r, btns) {
     + '</div></div></div>';
 }
 
+function qRow(r, btns) {
+  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
+  const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
+  return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
+    + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
+    + '<td class="num">' + fmt(r.subs) + '</td>'
+    + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
+    + '<td><div class="qnotes">'
+    + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
+    + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
+    + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
+}
+
 function qTable(rows, lastW, btns) {
   return '<table class="qt">'
     + '<tr><th style="width:56px">Score</th><th style="width:175px">Channel</th><th style="width:64px">Subs</th><th style="width:72px">Language</th><th>Notes</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
-    + rows.map((r) => {
-      const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
-      const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
-      return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
-        + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
-        + '<td class="num">' + fmt(r.subs) + '</td>'
-        + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
-        + '<td><div class="qnotes">'
-        + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
-        + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
-        + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
-    }).join('') + '</table>';
+    + rows.map((r) => qRow(r, btns)).join('') + '</table>';
 }
 
 let renaming = null, openMenu = null;
@@ -759,18 +779,22 @@ function renderLists() {
   const shown = triageMode === 'detailed' ? queue.slice(0, 3) : queue.slice(0, 10);
 
   let body = '<div class="listbar" style="margin-bottom:14px">'
-    + '<b>' + esc(game || 'Lists') + '</b>'
-    + '<select id="listpick" class="lpick">'
-    + '<option value="">' + (gameLists.length ? 'Select list…' : 'No lists yet') + '</option>'
-    + gameLists.map((n) => '<option value="' + esc(n) + '"' + (n === activeList ? ' selected' : '') + '>' + esc(n) + '</option>').join('')
-    + '<option value="__new">+ New list…</option></select>'
+    + '<div style="position:relative">'
+    + '<button class="lpbtn" data-act="lpmenu">'
+    + (l ? esc(activeList) : '<span style="color:var(--dim)">Select list…</span>')
+    + '<span class="car">▾</span></button>'
+    + (lpOpen
+      ? '<div class="lpmenu">'
+      + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
+      + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
+      : '')
+    + '</div>'
     + (l
       ? '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
       : '<span class="meta" style="font-size:12px">' + queue.length + ' candidates — pick a list to triage into</span>')
     + '<button class="ltab" data-act="mode" style="margin-left:auto">' + (triageMode === 'detailed' ? 'Compact view' : 'Detailed view') + '</button>'
-    + (l ? '<button class="ltab" data-act="closelist">Done</button>' : '')
     + '</div>';
 
   if (!l) {
@@ -820,10 +844,21 @@ function renderLists() {
 }
 
 document.addEventListener('click', (e) => {
+  if (lpOpen && !e.target.closest('.lpmenu') && !e.target.closest('[data-act="lpmenu"]')) {
+    lpOpen = false; renderLists();
+  }
   const b = e.target.closest('[data-act]');
   if (!b) return;
   const act = b.dataset.act;
-  if (act === 'startlist') {
+  if (act === 'lpmenu') {
+    lpOpen = !lpOpen; renderLists();
+  } else if (act === 'lpick') {
+    lpOpen = false; activeList = b.dataset.v; triageTab = 'queue'; qi = 0; renderLists();
+  } else if (act === 'lnew') {
+    lpOpen = false; pendingVerdict = null;
+    $('lmodal').style.display = 'flex';
+    setTimeout(() => $('lmname').focus(), 50);
+  } else if (act === 'startlist') {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
@@ -836,12 +871,35 @@ document.addEventListener('click', (e) => {
       return;
     }
     const row = b.closest('tr, .qcard2, .qrow');
-    if (row) {
-      row.classList.add('fadeout');
-      setTimeout(() => verdict(activeList, b.dataset.cid, b.dataset.v || null), 180);
-    } else {
-      verdict(activeList, b.dataset.cid, b.dataset.v || null);
-    }
+    const onQueue = triageTab === 'queue';
+    // The candidate just below the visible window replaces this one in place.
+    const winSize = triageMode === 'detailed' ? 3 : 10;
+    const repl = onQueue ? queueFor(activeList)[winSize] : null;
+    if (!row) { verdict(activeList, b.dataset.cid, b.dataset.v || null); return; }
+    const parent = row.parentNode;
+    const nextSib = row.nextElementSibling;
+    row.classList.add('fadeout');
+    setTimeout(() => {
+      verdict(activeList, b.dataset.cid, b.dataset.v || null, true);
+      row.remove();
+      if (repl) {
+        const html = triageMode === 'detailed'
+          ? detailCard(repl,
+            '<button class="vb big no" data-act="verdict" data-cid="' + repl.channelId + '" data-v="r">✗ Reject</button>'
+            + '<button class="vb big ok" data-act="verdict" data-cid="' + repl.channelId + '" data-v="a">✓ Accept</button>')
+          : qRow(repl, (x) =>
+            '<button class="vb no" data-act="verdict" data-cid="' + x.channelId + '" data-v="r">✗</button>'
+            + '<button class="vb ok" data-act="verdict" data-cid="' + x.channelId + '" data-v="a">✓</button>');
+        const frag = document.createElement('template');
+        frag.innerHTML = html;
+        parent.insertBefore(frag.content.firstChild, nextSib);
+      }
+      const remaining = triageMode === 'detailed'
+        ? parent.querySelectorAll('.qcard2').length
+        : parent.querySelectorAll('tr').length - 1;
+      if (onQueue && !remaining) renderLists();
+      else updTabs();
+    }, 180);
   } else if (act === 'lmcreate') {
     const name = $('lmname').value.trim();
     if (!name) return;
@@ -886,18 +944,6 @@ document.addEventListener('click', (e) => {
     if (box.style.display === 'block') $('navlistname').focus();
   } else if (act === 'acct') {
     alert('Accounts coming soon — your lists are safely stored in this browser for now.');
-  }
-});
-
-document.addEventListener('change', (e) => {
-  if (e.target.id !== 'listpick') return;
-  const v = e.target.value;
-  if (v === '__new') {
-    pendingVerdict = null;
-    $('lmodal').style.display = 'flex';
-    setTimeout(() => $('lmname').focus(), 50);
-  } else {
-    activeList = v || null; triageTab = 'queue'; qi = 0; renderLists();
   }
 });
 
