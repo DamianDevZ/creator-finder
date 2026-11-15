@@ -513,9 +513,26 @@ function autocomplete(inputId, ddId, endpoint, onPick) {
 })();
 
 $('load').onclick = async () => {
-  $('status').innerHTML = '<span class="spinner"></span>Profiling game…';
+  $('status').innerHTML = '';
   // Clear the previous game's results — a new game means a new queue.
   lastResults = []; lastGame = ''; $('lists').innerHTML = '';
+  // Skeleton state while profiling — panels appear only once data is ready.
+  $('base').style.display = 'block';
+  $('gametitle').innerHTML = '<span class="spinner" style="width:15px;height:15px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px"></span>Analyzing game…';
+  $('gamemeta').textContent = 'Pulling the store page, tags and similar games…';
+  $('gametags').innerHTML = '';
+  $('gameimg').style.display = 'none';
+  $('reldev').innerHTML = ''; $('relpub').innerHTML = '';
+  const chips = $('simchips');
+  chips.querySelectorAll('.gcard').forEach((c) => c.remove());
+  for (let i = 0; i < 10; i++) {
+    const sk = document.createElement('div');
+    sk.className = 'gcard';
+    sk.innerHTML = '<div class="skl" style="width:100%;height:78px"></div>'
+      + '<div class="skl" style="width:65%;height:12px;border-radius:5px;margin:10px"></div>'
+      + '<div class="skl" style="width:85%;height:9px;border-radius:4px;margin:0 10px 12px"></div>';
+    chips.insertBefore(sk, $('addcardbtn'));
+  }
   const res = await fetch('/api/fingerprint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: $('link').value }) });
   const j = await res.json();
   if (!res.ok) { $('status').textContent = 'Error: ' + j.error; return; }

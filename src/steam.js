@@ -167,17 +167,19 @@ async function topTagsFor(appid, n = 4) {
 async function fetchRelatedByCreator(name, excludeAppid) {
   if (!name) return [];
   const res = await fetch(
-    `https://store.steampowered.com/search/results/?query&start=0&count=20&developer=${encodeURIComponent(name)}&json=1`
+    `https://store.steampowered.com/search/results/?query&start=0&count=30&sort_by=Released_DESC&developer=${encodeURIComponent(name)}&json=1`
   );
   if (!res.ok) return [];
   const j = await res.json();
+  const JUNK = /\bdemo\b|playtest|soundtrack|\bost\b|\bdlc\b|supporter|artbook|season pass|upgrade|bundle|prologue|beta\b|\bpack\b/i;
   return (j.items || [])
     .map((it) => ({
       appid: (it.logo || '').match(/apps\/(\d+)/)?.[1],
       name: it.name,
       img: it.logo || null,
     }))
-    .filter((g) => g.appid && g.appid !== String(excludeAppid));
+    .filter((g) => g.appid && g.appid !== String(excludeAppid) && !JUNK.test(g.name))
+    .slice(0, 10);
 }
 
 export async function buildFingerprint(input, { manualTags = [] } = {}) {
