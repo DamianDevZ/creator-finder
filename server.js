@@ -25,7 +25,7 @@ const cache =
     ? new SupaCache(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
     : new Cache(process.env.VERCEL ? '/tmp/creator-finder-cache.json' : 'cache.json');
 const yt = new YouTube(process.env.YOUTUBE_API_KEY, cache);
-const notesJobs = new Map();
+const notesJobs_unused = null;
 const DAY = 24 * 60 * 60 * 1000;
 
 // Steam store search autocomplete (game names -> appids).
@@ -667,7 +667,7 @@ $('go').onclick = async () => {
   // Lists aren't game-tied — the selected list stays, verdicts apply to it.
   triageTab = 'queue';
   renderLists();
-  if (j.notesId) pollNotes(j.notesId);
+  requestNotes(j.results.map((r) => pools[j.game] && pools[j.game][r.channelId]).filter(Boolean));
   maybeExpand();
 };
 
@@ -734,9 +734,8 @@ async function fetchRound() {
   if (!res.ok || !j.results) return true; // round consumed; keep advancing
   const pool = poolFor(j.game);
   const fresh = j.results.map(snap).filter((r) => !pool[r.channelId] && !expandBuffer.some((b) => b.channelId === r.channelId));
-  if (j.notesId) fresh.forEach((r) => { r.aiPending = true; });
   expandBuffer.push(...fresh);
-  if (j.notesId) pollNotes(j.notesId);
+  requestNotes(fresh);
   return true;
 }
 
@@ -761,7 +760,7 @@ const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
-  vidTitles: r.vidTitles || [],
+  vidTitles: r.vidTitles || [], description: r.description || '',
   aiNote: r.aiNote || null,
 });
 const poolFor = (game) => pools[game] || {};
@@ -1082,30 +1081,33 @@ document.addEventListener('click', (e) => {
   }
 });
 
-let notesPollTimer = null;
-async function pollNotes(id) {
-  const targets = [...lastResults, ...Object.values(poolFor(lastGame))];
-  targets.forEach(r => { r.aiPending = true; });
+// AI notes are fetched synchronously per batch — no server-side jobs, so it
+// works identically on localhost and serverless.
+async function requestNotes(list) {
+  const pending = list.filter((r) => r && !r.aiNote && !notesCache[r.channelId]);
+  if (!pending.length) return;
+  pending.forEach((r) => { r.aiPending = true; });
   renderLists();
-  clearTimeout(notesPollTimer);
-  const tick = async () => {
+  for (let i = 0; i < pending.length; i += 20) {
+    const chunk = pending.slice(i, i + 20);
     try {
-      const j = await fetch('/api/notes?id=' + id).then(r => r.json());
-      if (j.done) {
-        for (const [cid, n] of Object.entries(j.notes || {})) notesCache[cid] = n;
-        for (const b of expandBuffer) if (notesCache[b.channelId]) { b.aiNote = notesCache[b.channelId]; b.aiPending = false; }
-        targets.forEach(r => {
-          r.aiPending = false;
-          if (j.notes && j.notes[r.channelId]) r.aiNote = j.notes[r.channelId];
-        });
-        savePools();
-        renderLists();
-        return;
-      }
-    } catch {}
-    notesPollTimer = setTimeout(tick, 2500);
-  };
-  tick();
+      const j = await fetch('/api/notes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channels: chunk.map((r) => ({
+            channelId: r.channelId, channel: r.channel, subs: r.subs,
+            games: r.games, description: r.description, vidTitles: r.vidTitles,
+          })),
+        }),
+      }).then((r) => r.json());
+      chunk.forEach((r) => {
+        r.aiPending = false;
+        const n = j.notes && j.notes[r.channelId];
+        if (n) { r.aiNote = n; notesCache[r.channelId] = n; }
+      });
+      savePools(); renderLists();
+    } catch { chunk.forEach((r) => { r.aiPending = false; }); }
+  }
 }
 </script>
 </body>
@@ -1157,32 +1159,8 @@ export const handler = async (req, res) => {
         (!b.lang || b.lang === 'any' || (r.language || 'English') === b.lang)
       );
       results = results.slice(0, b.expand ? (b.top || 400) : 20);
-      // Optional AI-written notes — runs in background so the table renders instantly.
-      let notesId = null;
-      if (b.ainotes && process.env.GEMINI_API_KEY && results.length) {
-        notesId = crypto.randomUUID();
-        notesJobs.set(notesId, { done: false, notes: {} });
-        aiNotesBatch(process.env.GEMINI_API_KEY, results)
-          .then(async (notes) => {
-            const map = {};
-            const norm = (n) => (typeof n === 'string' ? n : n?.note);
-            const idx = (n) => (typeof n === 'object' && n != null && n.i != null ? n.i : null);
-            notes.forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && results[k]) map[results[k].channelId] = norm(n); });
-            const missing = results.filter((r) => !map[r.channelId]);
-            if (missing.length) {
-              const retry = await aiNotesBatch(process.env.GEMINI_API_KEY, missing).catch(() => []);
-              retry.forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && missing[k]) map[missing[k].channelId] = norm(n); });
-            }
-            notesJobs.set(notesId, { done: true, notes: map });
-          })
-          .catch((e) => {
-            console.error('AI notes failed:', e.message);
-            notesJobs.set(notesId, { done: true, notes: {}, error: e.message });
-          });
-        setTimeout(() => notesJobs.delete(notesId), 10 * 60 * 1000);
-      }
       return json(200, {
-        game: fp.name, queries: queries.length, channelCount, results, notesId,
+        game: fp.name, queries: queries.length, channelCount, results,
         appids: { [fp.name]: fp.appid, ...Object.fromEntries(fp.similarGames.filter((g) => !String(g.appid).startsWith('manual')).map((g) => [g.name, g.appid])) },
       });
     }
@@ -1205,9 +1183,18 @@ h2{color:#e6ebf5;font-size:18px;margin:32px 0 10px}p{margin:12px 0}ul{padding-le
 strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;padding:8px 16px;border:1px solid #2a3142;border-radius:8px;text-decoration:none}
 </style></head><body>${html}<a class="back" href="/">← Back to Creator Finder</a></body></html>`);
     }
-    if (req.method === 'GET' && url.pathname === '/api/notes') {
-      const job = notesJobs.get(url.searchParams.get('id'));
-      return json(200, job || { done: true, notes: {} });
+    if (req.method === 'POST' && url.pathname === '/api/notes') {
+      const b = await readBody(req);
+      if (!process.env.GEMINI_API_KEY) return json(200, { notes: {} });
+      const chans = (b.channels || []).slice(0, 25);
+      const map = {};
+      const norm = (n) => (typeof n === 'string' ? n : n?.note);
+      const idx = (n) => (typeof n === 'object' && n != null && n.i != null ? n.i : null);
+      const apply = (list, arr) => (arr || []).forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && list[k]) map[list[k].channelId] = norm(n); });
+      apply(chans, await aiNotesBatch(process.env.GEMINI_API_KEY, chans).catch((e) => { console.error('AI notes:', e.message); return []; }));
+      const missing = chans.filter((c) => !map[c.channelId]);
+      if (missing.length) apply(missing, await aiNotesBatch(process.env.GEMINI_API_KEY, missing).catch(() => []));
+      return json(200, { notes: map });
     }
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(HTML);
