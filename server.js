@@ -83,6 +83,9 @@ const HTML = `<!DOCTYPE html>
   .navadd{width:100%;margin-top:8px;padding:7px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--dim);font-size:12px;cursor:pointer}
   .navadd:hover{color:var(--txt);border-color:var(--dim)}
   .navguest{padding:12px 8px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .navacct-wrap{margin-top:auto;padding:12px 8px;border-top:1px solid var(--line)}
+  .fadeout{opacity:0;transform:translateX(10px);transition:opacity .18s ease,transform .18s ease}
+  .qt tr,.qcard2{transition:opacity .18s ease,transform .18s ease}
   .navacct{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
   .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
   .navacct.ghost:hover{border-color:var(--dim)}
@@ -241,14 +244,16 @@ const HTML = `<!DOCTYPE html>
       <div style="width:30px;height:30px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--dim)">G</div>
       <div><div style="font-size:13px;font-weight:600">Guest</div><div class="meta" style="font-size:10.5px">lists saved locally</div></div>
     </div>
-    <button class="navacct" data-act="acct">Create account</button>
-    <button class="navacct ghost" data-act="acct">Log in</button>
   </div>
   <div class="navsec">LISTS</div>
   <div id="navlists"></div>
   <button class="navadd" data-act="newlist">+ New list</button>
   <div id="newlistbox" style="display:none;margin-top:8px">
     <input id="navlistname" placeholder="List name…" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;outline:none">
+  </div>
+  <div class="navacct-wrap">
+    <button class="navacct" data-act="acct">Create account</button>
+    <button class="navacct ghost" data-act="acct">Log in</button>
   </div>
 </aside>
 <div class="wrap">
@@ -300,7 +305,7 @@ const HTML = `<!DOCTYPE html>
       <div class="controls" style="border-top:none;margin-top:0;padding-top:0">
         <div class="ctl"><span>Min subs</span><input id="minsubs" value="5000"></div>
         <div class="ctl"><span>Max subs</span><input id="maxsubs" value="500000"></div>
-        <div class="ctl"><span>Results</span><input id="top" value="30"></div>
+        <input type="hidden" id="top" value="400">
         <input type="hidden" id="deep" checked>
         <label class="ctl switch" title="Only show channels where we found an email"><input type="checkbox" id="emailonly"><span class="sw"></span><span style="text-transform:none;font-size:12px">Has email</span></label>
         <input type="hidden" id="devonly" value="on">
@@ -779,7 +784,13 @@ document.addEventListener('click', (e) => {
     if (!lists[name]) lists[name] = { game: lastGame, verdicts: {}, channels: {} };
     activeList = name; triageTab = 'queue'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
-    verdict(activeList, b.dataset.cid, b.dataset.v || null);
+    const row = b.closest('tr, .qcard2, .qrow');
+    if (row) {
+      row.classList.add('fadeout');
+      setTimeout(() => verdict(activeList, b.dataset.cid, b.dataset.v || null), 180);
+    } else {
+      verdict(activeList, b.dataset.cid, b.dataset.v || null);
+    }
   } else if (act === 'tab') {
     triageTab = b.dataset.v; renderLists();
   } else if (act === 'mode') {
