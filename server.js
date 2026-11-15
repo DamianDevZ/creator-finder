@@ -810,7 +810,7 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || '—')) + '</div>'
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · ') || '—')) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
     + '<div class="qc-act">' + btns + '</div>'
@@ -1157,9 +1157,16 @@ export const handler = async (req, res) => {
         notesId = crypto.randomUUID();
         notesJobs.set(notesId, { done: false, notes: {} });
         aiNotesBatch(process.env.GEMINI_API_KEY, results)
-          .then((notes) => {
+          .then(async (notes) => {
             const map = {};
-            results.forEach((r, i) => { if (notes[i]) map[r.channelId] = notes[i]; });
+            const norm = (n) => (typeof n === 'string' ? n : n?.note);
+            const idx = (n) => (typeof n === 'object' && n != null && n.i != null ? n.i : null);
+            notes.forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && results[k]) map[results[k].channelId] = norm(n); });
+            const missing = results.filter((r) => !map[r.channelId]);
+            if (missing.length) {
+              const retry = await aiNotesBatch(process.env.GEMINI_API_KEY, missing).catch(() => []);
+              retry.forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && missing[k]) map[missing[k].channelId] = norm(n); });
+            }
             notesJobs.set(notesId, { done: true, notes: map });
           })
           .catch((e) => {
