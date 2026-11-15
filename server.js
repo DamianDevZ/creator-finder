@@ -205,7 +205,7 @@ const HTML = `<!DOCTYPE html>
   .qt .channame{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .qt .channame a{color:var(--txt);text-decoration:none}
   .qt .channame a:hover{color:var(--acc)}
-  .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim)}
+  .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);min-height:54px}
   .qt td:last-child{padding-right:20px}
   /* detailed creator card */
   .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
@@ -222,8 +222,8 @@ const HTML = `<!DOCTYPE html>
   .qc-rows{display:grid;grid-template-columns:64px 1fr;row-gap:9px;font-size:12.5px;margin-bottom:14px}
   .qc-lbl{color:var(--dim);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding-top:1px}
   .qc-val{color:var(--txt);line-height:1.55}
-  .qc-act{display:flex;gap:10px;align-items:stretch}
-  .vb.big{padding:0 18px;font-size:13px;border-radius:10px;min-width:96px}
+  .qc-act{display:flex;gap:8px;margin-top:8px}
+  .vb.big{padding:9px 0;font-size:12.5px;border-radius:10px;flex:1}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -712,9 +712,9 @@ function renderLists() {
           + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
           + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
           + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
-          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div>'
-          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
-          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div></div>'
+          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div>'
+          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
+          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button></div></div></div>'
           + '<div class="qc-rows">'
           + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
           + '<div class="qc-lbl">About</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
