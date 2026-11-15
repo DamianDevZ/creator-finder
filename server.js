@@ -218,7 +218,7 @@ const HTML = `<!DOCTYPE html>
   .qt .channame{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .qt .channame a{color:var(--txt);text-decoration:none}
   .qt .channame a:hover{color:var(--acc)}
-  .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);min-height:54px}
+  .qt .qnotes{font-size:12px;line-height:1.5;color:var(--dim);min-height:36px}
   .qt td:last-child{padding-right:20px}
   /* detailed creator card */
   .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
@@ -667,6 +667,7 @@ const snap = (r) => ({
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
   vidTitles: r.vidTitles || [],
+  aiNote: r.aiNote || null,
 });
 const poolFor = (game) => pools[game] || {};
 const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
@@ -720,8 +721,7 @@ function detailCard(r, btns) {
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
-    + ((r.vidTitles || []).length ? '<div class="qc-lbl">Videos</div><div class="qc-val" style="color:var(--dim)">' + r.vidTitles.slice(0, 3).map(esc).join('<br>') + '</div>' : '')
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · '))) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + '</div>'
     + '<div class="qc-act">' + btns + '</div>'
@@ -735,8 +735,7 @@ function qRow(r, btns) {
     + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
     + '<td class="num">' + fmt(r.subs) + '</td>'
     + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
-    + '<td><div class="qnotes">'
-    + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span>' : (r.notes || []).map(esc).join('<br>')) + '</div></td>'
+    + '<td><div class="qnotes">' + (r.notes || []).map(esc).join('<br>') + '</div></td>'
     + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
     + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
 }
@@ -985,17 +984,19 @@ document.addEventListener('click', (e) => {
 
 let notesPollTimer = null;
 async function pollNotes(id) {
-  lastResults.forEach(r => { r.aiPending = true; });
+  const targets = [...lastResults, ...Object.values(poolFor(lastGame))];
+  targets.forEach(r => { r.aiPending = true; });
   renderLists();
   clearTimeout(notesPollTimer);
   const tick = async () => {
     try {
       const j = await fetch('/api/notes?id=' + id).then(r => r.json());
       if (j.done) {
-        lastResults.forEach(r => {
+        targets.forEach(r => {
           r.aiPending = false;
-          if (j.notes && j.notes[r.channelId]) r.notes = [j.notes[r.channelId]];
+          if (j.notes && j.notes[r.channelId]) r.aiNote = j.notes[r.channelId];
         });
+        savePools();
         renderLists();
         return;
       }
