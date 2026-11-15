@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Find YouTube creators likely to play your Steam game",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "cli": "node index.js"
+    "cli": "node cli.js"
   }
 }

@@ -24,7 +24,7 @@ npm start              # web UI at http://localhost:3456
 CLI also available:
 
 ```bash
-node index.js find <steam-link-or-appid> --similar "Overcooked 2, PlateUp" --top 30
+node cli.js find <steam-link-or-appid> --similar "Overcooked 2, PlateUp" --top 30
 ```
 
 ## API usage
