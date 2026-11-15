@@ -1,6 +1,8 @@
 # Privacy Policy — Creator Finder
 
-Creator Finder is a tool that developers run locally on their own machine.
+Creator Finder uses **YouTube API Services**. By using it you also agree to the
+[YouTube Terms of Service](https://www.youtube.com/t/terms) and the
+[Google Privacy Policy](https://policies.google.com/privacy).
 
 - **Data accessed**: read-only public data via the YouTube Data API v3
   (video/channel metadata, statistics) and public Steam store information.
