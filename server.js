@@ -6,7 +6,9 @@ import { SupaCache } from './src/sbcache.js';
 import { YouTube } from './src/youtube.js';
 import { buildFingerprint, expandFrontier } from './src/steam.js';
 import { findCreators } from './src/pipeline.js';
-import { aiNotesBatch } from './src/gemini.js';
+import { extractContacts, extractAlias, classifyChannel } from './src/contacts.js';
+import { scoreChannel, daysSince } from './src/scoring.js';
+import { aiNotesBatch, campaignTemplate } from './src/gemini.js';
 import { PRIVACY_MD, TERMS_MD } from './src/legal.js';
 
 function loadEnv() {
@@ -346,6 +348,43 @@ const HTML = `<!DOCTYPE html>
         <button class="ltab" data-act="lmcancel">Cancel</button>
         <button class="btn" data-act="lmcreate" style="padding:8px 18px;font-size:13px">Create</button>
       </div>
+    </div>
+  </div>
+
+  <div id="amodal" class="lmodal" style="display:none">
+    <div class="lmbox" style="width:400px">
+      <div style="font-weight:700;margin-bottom:4px">Add a creator</div>
+      <div class="meta" style="font-size:11.5px;margin-bottom:12px">Search YouTube — pick a channel to add it to this list.</div>
+      <input id="aq" placeholder="Channel name…" autocomplete="off">
+      <div id="ares" style="margin-top:8px;max-height:280px;overflow-y:auto"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="ltab" data-act="amcancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cmodal" class="lmodal" style="display:none">
+    <div class="lmbox" style="width:640px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <div style="font-weight:700;margin-bottom:2px">Email campaign</div>
+      <div class="meta" style="font-size:11.5px;margin-bottom:14px">One template → a personalized draft for every accepted creator.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Game</div><input id="cgame"></div>
+        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Your name</div><input id="cdev"></div>
+        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Your email</div><input id="cemail"></div>
+      </div>
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">Subject</div>
+      <input id="csubject" placeholder="{game} — would love to see it on your channel">
+      <div style="display:flex;align-items:center;margin:12px 0 4px">
+        <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Template</div>
+        <button class="ltab" id="cgenbtn" data-act="cgen" style="margin-left:auto;font-size:11px">✦ Generate with AI</button>
+      </div>
+      <textarea id="ctemplate" rows="10" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit"></textarea>
+      <div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="ltab" data-act="ccancel">Close</button>
+        <button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & preview drafts</button>
+      </div>
+      <div id="cpreviews" style="margin-top:16px"></div>
     </div>
   </div>
 
@@ -956,9 +995,11 @@ function renderLists() {
       : '')
     + '</div>'
     + (l
-      ? '<button class="ltab' + (triageTab === 'queue' ? ' on' : '') + '" data-act="tab" data-v="queue">Queue (' + queue.length + ')</button>'
-      + '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
+      ? '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+      + '<span style="margin-left:auto"></span>'
+      + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button>'
+      + '<button class="ltab" data-act="campaign" style="font-size:11.5px;border-color:var(--acc);color:var(--acc)">✉ Campaign</button>'
       : '')
     + '<span style="margin-left:auto"></span>'
     + '</div>';
@@ -1025,7 +1066,7 @@ document.addEventListener('click', (e) => {
   if (act === 'lpmenu') {
     lpOpen = !lpOpen; renderLists();
   } else if (act === 'lpick') {
-    lpOpen = false; activeList = b.dataset.v; triageTab = 'queue'; qi = 0; renderLists();
+    lpOpen = false; activeList = b.dataset.v; triageTab = 'acc'; qi = 0; renderLists();
   } else if (act === 'lnew') {
     lpOpen = false; pendingVerdict = null;
     $('lmodal').style.display = 'flex';
@@ -1034,7 +1075,7 @@ document.addEventListener('click', (e) => {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
-    activeList = name; triageTab = 'queue'; qi = 0; saveLists(); renderLists();
+    activeList = name; triageTab = 'acc'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
     if (!activeList) {
       pendingVerdict = { cid: b.dataset.cid, v: b.dataset.v || null };
@@ -1078,7 +1119,7 @@ document.addEventListener('click', (e) => {
     const name = $('lmname').value.trim();
     if (!name) return;
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
-    activeList = name; triageTab = 'queue'; qi = 0;
+    activeList = name; triageTab = 'acc'; qi = 0;
     $('lmodal').style.display = 'none'; $('lmname').value = '';
     saveLists();
     const pv = pendingVerdict; pendingVerdict = null;
@@ -1096,7 +1137,7 @@ document.addEventListener('click', (e) => {
     $('backlist').style.display = 'none';
     renderLists();
   } else if (act === 'openlist') {
-    activeList = b.dataset.n; triageTab = 'queue'; qi = 0; openMenu = null;
+    activeList = b.dataset.n; triageTab = 'acc'; qi = 0; openMenu = null;
     $('base').style.display = 'none'; $('backlist').style.display = 'none';
     renderLists();
   } else if (act === 'itemmenu') {
@@ -1118,8 +1159,125 @@ document.addEventListener('click', (e) => {
     if (box.style.display === 'block') $('navlistname').focus();
   } else if (act === 'acct') {
     alert('Accounts coming soon — your lists are safely stored in this browser for now.');
+  } else if (act === 'addcreator') {
+    $('amodal').style.display = 'flex'; $('aq').value = ''; $('ares').innerHTML = '';
+    setTimeout(() => $('aq').focus(), 50);
+  } else if (act === 'amcancel') {
+    $('amodal').style.display = 'none';
+  } else if (act === 'apick') {
+    const l = lists[activeList]; if (!l) return;
+    b.style.pointerEvents = 'none'; b.style.opacity = '.5';
+    fetch('/api/channel-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: b.dataset.cid }) })
+      .then((r) => r.json()).then((p) => {
+        if (p.error) { b.style.pointerEvents = ''; b.style.opacity = ''; return; }
+        l.channels ||= {}; l.verdicts ||= {};
+        l.channels[p.channelId] = snap(p); l.verdicts[p.channelId] = 'a';
+        saveLists(); $('amodal').style.display = 'none'; renderLists();
+        requestNotes([l.channels[p.channelId]]).then(() => { if (l.channels[p.channelId].aiNote) saveLists(); });
+      }).catch(() => { b.style.pointerEvents = ''; b.style.opacity = ''; });
+  } else if (act === 'campaign') {
+    openCampaign();
+  } else if (act === 'ccancel') {
+    $('cmodal').style.display = 'none';
+  } else if (act === 'cgen') {
+    const btn = $('cgenbtn'); btn.disabled = true; btn.textContent = 'Generating…';
+    const c = readCampForm();
+    fetch('/api/campaign-template', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ game: c.game || 'my game', dev: c.dev || 'the developer' }) })
+      .then((r) => r.json()).then((j) => { if (j.template) $('ctemplate').value = j.template; })
+      .finally(() => { btn.disabled = false; btn.textContent = '✦ Generate with AI'; });
+  } else if (act === 'csave') {
+    saveCampaign(); renderPreviews();
+  } else if (act === 'copyc') {
+    const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
+    if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
+  } else if (act === 'sendc') {
+    const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
+    const to = (r?.emails || [])[0];
+    if (!to) return;
+    const camp = readCampForm();
+    const subj = fillTemplate(camp.subject || '{game} — would love to see it on your channel', r, camp);
+    window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(fillTemplate(camp.template, r, camp));
+    l.sent ||= {}; l.sent[r.channelId] = Date.now(); saveCampaign(); renderPreviews();
   }
 });
+
+// ---- Email campaign -----------------------------------------------
+const SKEY = 'cf_sender';
+const DEF_TPL = "Hi {alias},\n\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\n\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\n\n{keys}\n\nHappy to answer any questions — thanks for your time!\n\nKind regards,\n{dev}";
+const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
+
+function fillTemplate(tpl, c, camp) {
+  let note = (c.aiNote || (c.notes || [])[0] || 'great coverage of games like this').replace(/[.\s]+$/, '');
+  note = note.charAt(0).toLowerCase() + note.slice(1);
+  const map = {
+    '{name}': c.channel || '', '{alias}': c.alias || c.channel || 'there',
+    '{note}': note, '{game}': camp.game || '', '{dev}': camp.dev || '',
+    '{keys}': 'Key 1: …\nKey 2: …',
+  };
+  return String(tpl || '').replace(/\{(name|alias|note|game|dev|keys)\}/g, (m) => map[m] ?? m);
+}
+
+function readCampForm() {
+  return { game: $('cgame').value.trim(), dev: $('cdev').value.trim(), email: $('cemail').value.trim(), subject: $('csubject').value.trim(), template: $('ctemplate').value };
+}
+const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm());
+function openCampaign() {
+  const l = lists[activeList]; if (!l) return;
+  let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
+  const c = l.campaign || {};
+  $('cgame').value = c.game || lastGame || '';
+  $('cdev').value = c.dev || s.dev || '';
+  $('cemail').value = c.email || s.email || '';
+  $('csubject').value = c.subject || '';
+  $('ctemplate').value = c.template || DEF_TPL;
+  $('cpreviews').innerHTML = '';
+  $('cmodal').style.display = 'flex';
+}
+function saveCampaign() {
+  const l = lists[activeList]; if (!l) return;
+  const c = readCampForm(); l.campaign = c;
+  let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
+  localStorage.setItem(SKEY, JSON.stringify({ ...s, dev: c.dev, email: c.email }));
+  saveLists();
+}
+function renderPreviews() {
+  const l = lists[activeList]; if (!l) return;
+  const c = readCampForm();
+  const rows = accChannels(l);
+  $('cpreviews').innerHTML = rows.length ? rows.map((r) => {
+    const to = (r.emails || [])[0];
+    const sent = l.sent && l.sent[r.channelId];
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<b style="font-size:13px">' + esc(r.channel) + '</b>'
+      + '<span class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file — copy & DM') + '</span>'
+      + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
+      + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy draft</button>'
+      + (to ? '<button class="vb ok" data-act="sendc" data-cid="' + r.channelId + '">Send →</button>' : '')
+      + '</div>'
+      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">' + esc(fillTemplate(c.template, r, c)) + '</pre></div>';
+  }).join('') : '<div class="meta" style="padding:16px;text-align:center">No accepted creators yet.</div>';
+}
+
+// ---- Manual creator add ---------------------------------------------
+let aqT = null;
+$('aq').oninput = () => {
+  clearTimeout(aqT);
+  const q = $('aq').value.trim();
+  if (q.length < 2) { $('ares').innerHTML = ''; return; }
+  $('ares').innerHTML = '<div class="meta" style="padding:10px;font-size:12px">Searching…</div>';
+  aqT = setTimeout(async () => {
+    try {
+      const rs = await fetch('/api/channel-search?q=' + encodeURIComponent(q)).then((r) => r.json());
+      $('ares').innerHTML = rs.length ? rs.map((c) =>
+        '<div data-act="apick" data-cid="' + c.channelId + '" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'var(--panel2)\'" onmouseout="this.style.background=\'\'">'
+        + '<img src="' + c.thumb + '" style="width:30px;height:30px;border-radius:50%">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.name) + '</div>'
+        + '<div class="meta" style="font-size:11px">' + fmt(c.subs) + ' subs</div></div></div>').join('')
+        : '<div class="meta" style="padding:10px;font-size:12px">No channels found.</div>';
+    } catch { $('ares').innerHTML = '<div class="meta" style="padding:10px;font-size:12px">Search failed.</div>'; }
+  }, 350);
+};
 
 document.addEventListener('input', (e) => {
   if (e.target.id !== 'minsubs' && e.target.id !== 'maxsubs') return;
@@ -1217,6 +1375,52 @@ export const handler = async (req, res) => {
       const b = await readBody(req);
       const picks = await expandFrontier(b.base || [], b.used || [], list(b.tags));
       return json(200, { names: picks });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/channel-search') {
+      const q = url.searchParams.get('q') || '';
+      const ids = await yt.searchChannels(q, 8);
+      const chans = await yt.channels(ids);
+      return json(200, chans.map((c) => ({
+        channelId: c.id,
+        name: c.snippet?.title || '',
+        thumb: c.snippet?.thumbnails?.default?.url || '',
+        subs: Number(c.statistics?.subscriberCount || 0),
+      })));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/channel-profile') {
+      const b = await readBody(req);
+      const [ch] = await yt.channels([b.channelId]);
+      if (!ch) return json(404, { error: 'Channel not found' });
+      const recent = await yt.recentVideosRSS(b.channelId, 10).catch(() => []);
+      const texts = [ch.snippet?.description, ...recent.flatMap((v) => [v.snippet?.title, v.snippet?.description])].filter(Boolean);
+      const { emails, socials } = extractContacts(texts);
+      const alias = extractAlias(texts, emails);
+      const { niche, styles, language } = classifyChannel(texts);
+      const medViews = recent.length
+        ? Math.round(recent.reduce((s, v) => s + Number(v.statistics?.viewCount || 0), 0) / recent.length)
+        : null;
+      const ds = recent[0]?.snippet?.publishedAt ? daysSince(recent[0].snippet.publishedAt) : null;
+      const subs = Number(ch.statistics?.subscriberCount || 0);
+      const { score, breakdown } = scoreChannel({
+        relevantVideoCount: 0, medianRecentViews: medViews, subscriberCount: subs, daysSinceLastUpload: ds,
+      });
+      return json(200, {
+        channelId: ch.id,
+        channel: ch.snippet?.title || '',
+        thumb: ch.snippet?.thumbnails?.medium?.url || ch.snippet?.thumbnails?.default?.url || '',
+        url: `https://youtube.com/channel/${ch.id}`,
+        subs, medianViews: medViews, daysSince: ds,
+        description: (ch.snippet?.description || '').slice(0, 300),
+        alias, niche, language,
+        notes: [styles.length ? styles.join(' · ') : 'General gaming'],
+        vidTitles: recent.map((v) => v.snippet?.title).filter(Boolean).slice(0, 8),
+        games: [], emails, socials, score, breakdown,
+      });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/campaign-template') {
+      const b = await readBody(req);
+      if (!process.env.GEMINI_API_KEY) return json(200, { template: null });
+      return json(200, { template: await campaignTemplate(process.env.GEMINI_API_KEY, { game: b.game || 'my game', dev: b.dev || 'the developer' }).catch(() => null) });
     }
     if (req.method === 'POST' && url.pathname === '/api/fingerprint') {
       const b = await readBody(req);

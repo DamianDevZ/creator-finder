@@ -80,6 +80,13 @@ export class YouTube {
     return this.#byId('channel', 'channels', 'snippet,statistics,brandingSettings,contentDetails', channelIds, WEEK);
   }
 
+  // Channel search for manual adds — 100 units per call, cached 24h.
+  async searchChannels(query, maxResults = 8) {
+    const j = await this.cache.wrap(`chsearch:${query.toLowerCase()}`, async () =>
+      this.get('search', { part: 'snippet', type: 'channel', q: query, maxResults }));
+    return (j.items || []).map((it) => it.snippet?.channelId).filter(Boolean);
+  }
+
   // Latest uploads via the channel's official RSS feed — ZERO quota.
   // Falls back to the playlistItems API path on any failure.
   async recentVideosRSS(channelId, maxResults = 15) {

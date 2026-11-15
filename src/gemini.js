@@ -29,3 +29,21 @@ ${JSON.stringify(items)}`;
   const text = j.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
   return JSON.parse(text.replace(/```json|```/g, '').trim());
 }
+
+// Outreach email template with merge variables the client fills per creator.
+export async function campaignTemplate(apiKey, { game, dev }) {
+  const prompt = `Write a short outreach email a game developer sends to YouTubers asking them to cover their game "${game}". Sender name: "${dev}".
+Use these merge variables literally where appropriate: {name} (channel name), {alias} (creator's first name, used after "Hi"), {note} (a short descriptor of the channel's content style like "chill co-op let's plays with dry humor" — write the sentence so it slots in as a noun phrase, e.g. "Your style — {note} — is exactly the vibe our players watch"), {game}, {dev}, {keys} (where steam keys are listed).
+Under 130 words, warm and human, no marketing-speak, no emojis. Output ONLY the email body.`;
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    }
+  );
+  const j = await res.json();
+  if (!res.ok) throw new Error(j?.error?.message || `Gemini HTTP ${res.status}`);
+  return (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+}
