@@ -703,15 +703,21 @@ async function maybeExpand() {
 }
 
 // One frontier round: next pick per base game -> scan -> buffer candidates.
+// Each base is queried in its own parallel call — small enough to never
+// time out, and one base's failure doesn't sink the round.
 async function fetchRound() {
   const base = [...simMap.entries()].filter(([, v]) => v && v.appid).map(([name, v]) => ({ name, appid: v.appid }));
-  const er = await fetch('/api/expand-games', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base, used: [...usedGameNames], tags: derivedTags().join(',') }),
-  });
-  const ej = await er.json().catch(() => ({}));
-  if (!er.ok) return false;
-  const batch = (ej.names || []).filter((g) => !usedGameNames.has(g.name.toLowerCase()));
+  const picks = (await Promise.all(base.map(async (b) => {
+    try {
+      const er = await fetch('/api/expand-games', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base: [b], used: [...usedGameNames], tags: derivedTags().join(',') }),
+      });
+      const ej = await er.json().catch(() => ({}));
+      return er.ok ? (ej.names || [])[0] : null;
+    } catch { return null; }
+  }))).filter(Boolean);
+  const batch = picks.filter((g) => !usedGameNames.has(g.name.toLowerCase()));
   batch.forEach((g) => { usedGameNames.add(g.name.toLowerCase()); gameAppids[g.name.toLowerCase()] = g.appid; });
   if (!batch.length) return false;
   const res = await fetch('/api/find', {
