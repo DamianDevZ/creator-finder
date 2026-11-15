@@ -222,8 +222,8 @@ const HTML = `<!DOCTYPE html>
   .qc-rows{display:grid;grid-template-columns:64px 1fr;row-gap:9px;font-size:12.5px;margin-bottom:14px}
   .qc-lbl{color:var(--dim);font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding-top:1px}
   .qc-val{color:var(--txt);line-height:1.55}
-  .qc-act{display:flex;gap:8px;margin-top:8px}
-  .vb.big{padding:9px 0;font-size:12.5px;border-radius:10px;flex:1}
+  .qc-act{display:flex;gap:10px;justify-content:flex-end}
+  .vb.big{padding:12px 26px;font-size:13.5px;border-radius:10px;min-width:110px}
   .soc a{color:var(--dim);font-size:12px;text-decoration:none;margin-right:8px}
   .soc a:hover{color:var(--acc)}
   .covers{font-size:12.5px;color:var(--dim);line-height:1.6}
@@ -712,15 +712,15 @@ function renderLists() {
           + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
           + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
           + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
-          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div>'
-          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
-          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button></div></div></div>'
+          + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div></div>'
           + '<div class="qc-rows">'
           + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<b>' + esc(g) + '</b>').join(', ') + '</div>'
           + '<div class="qc-lbl">About</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : (r.notes || []).map(esc).join('<br>')) + '</div>'
           + ((r.vidTitles || []).length ? '<div class="qc-lbl">Videos</div><div class="qc-val" style="color:var(--dim)">' + r.vidTitles.slice(0, 3).map(esc).join('<br>') + '</div>' : '')
           + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
           + '</div>'
+          + '<div class="qc-act"><button class="vb big no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗ Reject</button>'
+          + '<button class="vb big ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓ Accept</button></div>'
           + '</div></div>';
       }).join('');
     } else {
