@@ -11,7 +11,7 @@ export async function aiNotesBatch(apiKey, channels) {
     videoTitles: (c.vidTitles || []).slice(0, 6),
   }));
   const prompt = `You are helping an indie game developer write outreach emails to YouTubers.
-For each channel below, write ONE short "notes" line (max 12 words) describing their content style and personality — e.g. "Chill co-op let's plays with friends, loves chaotic party games" or "Analytical reviews, dry humor". Focus on: commentary style, solo vs group, tone (chill/hype/analytical/funny), format (let's play/review/stream clips). No view counts, no video titles, no subscriber numbers.
+For each channel below, write ONE short "notes" line (under 90 characters, roughly 10-12 words) describing their content style and personality — e.g. "Chill co-op let's plays with friends, loves chaotic party games" or "Analytical reviews, dry humor". Focus on: commentary style, solo vs group, tone (chill/hype/analytical/funny), format (let's play/review/stream clips). No view counts, no video titles, no subscriber numbers.
 
 Return ONLY a JSON array of strings, one per input index, no markdown.
 
