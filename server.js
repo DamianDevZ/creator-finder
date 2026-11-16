@@ -205,6 +205,19 @@ const HTML = `<!DOCTYPE html>
   .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
   .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
   .kchip.claimed{border-color:#d4a017;color:#e8c35a}.kchip.redeemed{border-color:var(--good);color:var(--good)}
+  .campsec{background:linear-gradient(180deg,rgba(91,140,255,.05),transparent 90px),var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+  .cs-head{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+  .cs-ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,rgba(91,140,255,.2),rgba(124,91,255,.2));color:var(--acc);font-size:13px;flex-shrink:0}
+  .keyrow{display:grid;grid-template-columns:minmax(0,1fr) 86px 140px 66px 86px 26px;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);font-size:12px}
+  .keyrow.khead{border-top:none;padding:0 4px 8px;color:var(--dim);font-size:10px;letter-spacing:.7px;text-transform:uppercase;font-weight:700}
+  .keyrow .kmono{font-family:monospace;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:3px 8px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .draftcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:linear-gradient(180deg,rgba(91,140,255,.04),transparent 70px),var(--panel)}
+  .dc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .dc-av{width:34px;height:34px;border-radius:50%;flex-shrink:0;background:var(--bg3)}
+  .dmail{border:1px solid var(--line);border-radius:10px;margin-top:10px;overflow:hidden}
+  .dmail .dm-head{background:var(--panel2);padding:8px 14px;font-size:11px;color:var(--dim);display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+  .dmail .dm-head b{color:var(--txt);font-weight:600}
+  .dmail .dm-body{padding:13px 16px;font-size:12.5px;line-height:1.65;color:var(--txt);white-space:pre-wrap;font-family:inherit;background:var(--bg3)}
   .apick:hover{background:var(--panel2)}
   .mtab{font-size:15px;font-weight:700;color:var(--dim);cursor:pointer;padding:4px 2px;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
   .mtab.on{color:var(--txt);border-bottom-color:var(--acc)}
@@ -1038,38 +1051,39 @@ function renderLists() {
     if (campTab === 'tmpl') {
       const c = l.campaign || {};
       const s = senderPrefs();
-      body += campSec('Your details',
+      body += campSec('<span class="cs-ic">◈</span>Your details',
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
         + campField('Game', 'cgame', c.game || lastGame || '')
         + campField('Your name', 'cdev', c.dev || s.dev || '')
         + campField('Your email', 'cemail', c.email || s.email || '')
         + '</div><div style="margin-top:10px">'
         + campField('Subject', 'csubject', c.subject || '') + '</div>')
-        + campSec('Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none;margin-top:-5px">✦ Generate with AI</button>',
+        + campSec('<span class="cs-ic">✉</span>Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="margin-left:auto;font-size:11px;text-transform:none">✦ Generate with AI</button>',
           '<textarea id="ctemplate" rows="16" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
           + esc(c.template || DEF_TPL) + '</textarea>'
           + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} what they do · {keyoffer} count-aware key offer · {keys} key list · {game} · {dev}</div>'
           + '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
     } else if (campTab === 'keys') {
       const chans = l.channels || {};
-      body += campSec('Add keys',
+      body += campSec('<span class="cs-ic">⚿</span>Add keys',
         '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace">'
         + esc((l.keys || []).filter((k) => k.st === 'free').map((k) => k.k).join('\\n')) + '</textarea>'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
         + '<div class="meta" id="ckeycount"></div>'
         + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Save keys</button></div>')
-        + campSec('All keys — ' + (l.keys || []).length,
+        + campSec('<span class="cs-ic">☰</span>All keys — ' + (l.keys || []).length,
           (l.keys || []).length
-            ? l.keys.map((k) => {
+            ? '<div class="keyrow khead"><span>Key</span><span>Added</span><span>Assigned to</span><span>Status</span><span>Since</span><span></span></div>'
+            + l.keys.map((k) => {
               const who = k.cid && chans[k.cid] ? chans[k.cid].channel : null;
               const st = k.st === 'free' ? 'free' : k.st === 'assigned' ? 'assigned' : k.st;
-              return '<div style="display:flex;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:12px">'
-                + '<span style="font-family:monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(k.k) + '</span>'
-                + '<span class="meta" style="font-size:11px;width:80px">added ' + (k.added ? fmtAge(Math.floor((Date.now() - k.added) / 86400000)).replace(' ago', '') + ' ago' : '—') + '</span>'
-                + '<span style="font-size:11.5px;width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (who ? '→ ' + esc(who) : '—') + '</span>'
+              return '<div class="keyrow">'
+                + '<span><span class="kmono">' + esc(k.k) + '</span></span>'
+                + '<span class="meta" style="font-size:11px">' + (k.added ? fmtAge(Math.floor((Date.now() - k.added) / 86400000)).replace(' ago', '') + ' ago' : '—') + '</span>'
+                + '<span style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (who ? '→ ' + esc(who) : '—') + '</span>'
                 + '<span class="pill ' + (st === 'free' ? 'p-mid' : st === 'sent' ? 'p-bad' : 'p-good') + '" style="font-size:10px">' + st + '</span>'
-                + '<span class="meta" style="font-size:11px;width:80px">' + (k.at && who ? fmtAge(Math.floor((Date.now() - k.at) / 86400000)) : '') + '</span>'
-                + (st === 'free' ? '<button class="vb no" data-act="keydel" data-k="' + esc(k.k) + '" style="padding:1px 8px">×</button>' : '<span style="width:26px"></span>')
+                + '<span class="meta" style="font-size:11px">' + (k.at && who ? fmtAge(Math.floor((Date.now() - k.at) / 86400000)) : '—') + '</span>'
+                + (st === 'free' ? '<button class="vb no" data-act="keydel" data-k="' + esc(k.k) + '" style="padding:1px 8px">×</button>' : '<span></span>')
                 + '</div>';
             }).join('')
             : '<div class="meta" style="padding:14px;text-align:center">No keys yet.</div>');
@@ -1340,8 +1354,8 @@ document.addEventListener('click', (e) => {
 const SKEY = 'cf_sender';
 const senderPrefs = () => { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { return {}; } };
 const campSec = (title, inner) =>
-  '<div style="border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px">'
-  + '<div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--dim);margin-bottom:10px">' + title + '</div>' + inner + '</div>';
+  '<div class="campsec">'
+  + '<div class="cs-head">' + title + '</div>' + inner + '</div>';
 const campField = (label, id, val) =>
   '<div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">' + label + '</div>'
   + '<input id="' + id + '" value="' + esc(val) + '" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none"></div>';
@@ -1426,34 +1440,37 @@ function draftRow(l, r, camp, free) {
   const to = (r.emails || [])[0];
   const assigned = assignedKeys(l, r.channelId);
   const sent = l.sent && l.sent[r.channelId];
-  let body;
+  const av = r.thumb ? '<img class="dc-av" src="' + r.thumb + '">' : '<div class="dc-av"></div>';
+  let lower;
   if (!assigned.length) {
     const want = Math.min((l.alloc && l.alloc[r.channelId]) || 1, Math.max(1, free));
-    body = '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11px" class="meta">keys:'
+    lower = '<div style="margin-top:10px;display:flex;align-items:center;gap:6px;font-size:11px" class="meta">keys:'
       + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="-1" style="padding:1px 8px">−</button>'
       + ' <b>' + want + '</b>'
       + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="1" style="padding:1px 8px">+</button>'
       + ' <span style="margin-left:8px">(' + free + ' free)</span>'
       + ' <button class="vb ok" data-act="draftc" data-cid="' + r.channelId + '" style="margin-left:auto">Draft</button></div>';
   } else {
-    body = '<div style="margin-top:8px">' + assigned.map((k) =>
+    lower = '<div style="margin-top:10px">' + assigned.map((k) =>
       '<span class="kchip ' + (k.st === 'sent' || k.st === 'assigned' ? '' : k.st) + '"'
       + (sent ? ' data-act="keycycle" data-cid="' + r.channelId + '" data-k="' + esc(k.k) + '" title="click: ' + k.st + ' → ' + KNEXT[k.st] + '"' : ' title="' + k.st + ' — locked when marked sent"')
       + '>' + esc(k.k) + '</span>').join('') + '</div>'
-      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">'
-      + esc(fillTemplate(camp.template, r, camp, keyTextFor(l, r.channelId))) + '</pre>';
+      + '<div class="dmail">'
+      + '<div class="dm-head"><span>To: <b>' + esc(to || '—') + '</b></span>'
+      + '<span>Subject: <b>' + esc(fillTemplate(camp.subject || '', r, camp, '')) + '</b></span></div>'
+      + '<div class="dm-body">' + esc(fillTemplate(camp.template, r, camp, keyTextFor(l, r.channelId))) + '</div></div>';
   }
-  return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
-    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-    + '<b style="font-size:13px">' + esc(r.channel) + '</b>'
-    + '<span class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file') + '</span>'
-    + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
+  return '<div class="draftcard">'
+    + '<div class="dc-head">' + av
+    + '<div style="min-width:0;flex:1"><div style="font-size:13px;font-weight:700">' + esc(r.channel) + '</div>'
+    + '<div class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file') + '</div></div>'
+    + (sent ? '<span class="pill p-good" style="font-size:10px">Sent</span>' : '')
     + (assigned.length
       ? '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
       + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
       + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
       : '')
-    + '</div>' + body + '</div>';
+    + '</div>' + lower + '</div>';
 }
 
 function renderPreviews() {
