@@ -106,6 +106,12 @@ const HTML = `<!DOCTYPE html>
   .wrap.home .searchbar{padding:12px;border-radius:16px;margin-top:26px}
   .wrap.home .searchbar input{font-size:17px}
   .wrap.home .searchbar .btn{padding:12px 28px;font-size:15px}
+  .howto{display:none;gap:12px;margin-top:36px}
+  .wrap.home .howto{display:grid;grid-template-columns:repeat(3,1fr)}
+  .howcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .howcard .hnum{width:24px;height:24px;border-radius:8px;background:rgba(91,140,255,.14);color:var(--acc);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .howcard b{display:block;font-size:13px;margin:12px 0 6px}
+  .howcard p{margin:0;font-size:12px;color:var(--dim);line-height:1.55}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
@@ -328,6 +334,12 @@ const HTML = `<!DOCTYPE html>
     <input id="link" placeholder="Paste a Steam link or type a game name…" autofocus>
     <div class="dd" id="linkdd" style="display:none;left:10px;right:10px;width:auto;top:100%"></div>
     <button class="btn" id="load">Analyze game</button>
+  </div>
+
+  <div class="howto">
+    <div class="howcard"><div class="hnum">1</div><b>Profile your game</b><p>Paste a Steam link or title — we pull its tags, style, and the games players compare it to.</p></div>
+    <div class="howcard"><div class="hnum">2</div><b>Find the right creators</b><p>We scan YouTube for channels that actually cover games like yours and rank them by fit, activity, and reach.</p></div>
+    <div class="howcard"><div class="hnum">3</div><b>Reach out &amp; track</b><p>Accept creators into a list, draft personalized emails with Steam keys, and get notified if they cover you.</p></div>
   </div>
 
   <div id="base" style="display:none">
@@ -994,7 +1006,7 @@ function skelCards() {
 
 function renderLists() {
   const el = $('lists');
-  $('viewtitle').innerHTML = activeList ? esc(activeList) : '<b>CREATOR</b>FINDER';
+  $('viewtitle').innerHTML = activeList ? esc(activeList) : '<b style="color:var(--acc)">CREATOR</b><span style="color:var(--dim)">FINDER</span>';
   renderNav();
   const l = activeList ? lists[activeList] : null;
   const game = lastGame || '';
