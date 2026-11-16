@@ -206,6 +206,9 @@ const HTML = `<!DOCTYPE html>
   .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
   .kchip.claimed{border-color:#d4a017;color:#e8c35a}.kchip.redeemed{border-color:var(--good);color:var(--good)}
   .apick:hover{background:var(--panel2)}
+  .mtab{font-size:15px;font-weight:700;color:var(--dim);cursor:pointer;padding:4px 2px;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+  .mtab.on{color:var(--txt);border-bottom-color:var(--acc)}
+  .mtab:hover{color:var(--txt)}
   .lmbox input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none}
   .listbar select,.listbar input{background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none}
   .vbtns{display:flex;gap:6px}
@@ -385,7 +388,9 @@ const HTML = `<!DOCTYPE html>
       <input id="egames" autocomplete="off">
       <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Emails — comma-separated</div>
       <input id="eemails" autocomplete="off">
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <div style="display:flex;gap:8px;align-items:center;margin-top:14px">
+        <button class="ltab" data-act="eremove" style="color:#e06c75;border-color:#e06c75;font-size:11.5px">Remove from list</button>
+        <span style="margin-left:auto"></span>
         <button class="ltab" data-act="ecancel">Cancel</button>
         <button class="btn" data-act="esave" style="padding:8px 18px;font-size:13px">Save</button>
       </div>
@@ -908,7 +913,7 @@ function chanLine(r) {
     + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language || 'English') + '</div></div>';
 }
 
-function detailCard(r, btns) {
+function detailCard(r, btns, status) {
   const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
   return '<div class="qcard2">'
@@ -933,7 +938,8 @@ function detailCard(r, btns) {
         + '<button class="vb" data-act="covno" data-cid="' + r.channelId + '" style="margin-left:4px">Dismiss</button>')
       + '</div>' : '')
     + '</div>'
-    + '<div class="qc-act">' + btns + '</div>'
+    + '<div class="qc-act" style="flex-direction:column;align-items:flex-end;align-self:stretch;justify-content:space-between">'
+    + (status || '<span></span>') + '<div style="display:flex;gap:8px">' + btns + '</div></div>'
     + '</div></div></div>';
 }
 
@@ -1011,13 +1017,9 @@ function renderLists() {
         : ''))
     + '</div>'
     + (l
-      ? '<button class="ltab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">Creators</button>'
-      + '<button class="ltab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp">✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '') + '</button>'
-      + '<span style="margin-left:auto"></span>'
-      + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
-      + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
-      + '</button>'
-      + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button>'
+      ? '<span style="margin-left:20px"></span>'
+      + '<button class="mtab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">Creators</button>'
+      + '<button class="mtab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp" style="margin-left:16px">✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '') + '</button>'
       : '')
     + '<span style="margin-left:auto"></span>'
     + '</div>';
@@ -1107,18 +1109,20 @@ function renderLists() {
       body += '<div id="cpreviews"></div>';
     }
   } else {
-    body += '<div style="display:flex;gap:8px;margin-bottom:14px">'
+    body += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">'
       + '<button class="ltab' + (creatorTab === 'acc' ? ' on' : '') + '" data-act="ctab" data-v="acc">Accepted (' + acc.length + ')</button>'
-      + '<button class="ltab' + (creatorTab === 'rej' ? ' on' : '') + '" data-act="ctab" data-v="rej">Rejected (' + rej.length + ')</button></div>';
+      + '<button class="ltab' + (creatorTab === 'rej' ? ' on' : '') + '" data-act="ctab" data-v="rej">Rejected (' + rej.length + ')</button>'
+      + '<span style="margin-left:auto"></span>'
+      + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
+      + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
+      + '</button>'
+      + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button></div>';
     const ids = creatorTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
-    const moveBtns = (r) =>
-      '<button class="vb" data-act="editchan" data-cid="' + r.channelId + '">Edit</button>'
-      + '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">' + 'Back to queue' + '</button>'
-      + '<button class="vb ' + (creatorTab === 'acc' ? 'no' : 'ok') + '" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (creatorTab === 'acc' ? 'r' : 'a') + '">' + (creatorTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>';
+    const moveBtns = (r) => '<button class="vb" data-act="editchan" data-cid="' + r.channelId + '">Edit</button>';
     body += rows.length
       ? (triageMode === 'detailed'
-        ? rows.map((r) => detailCard(r, moveBtns(r))).join('')
+        ? rows.map((r) => detailCard(r, moveBtns(r), creatorTab === 'acc' ? chanStatus(l, r) : '')).join('')
         : qTable(rows, 190, moveBtns))
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
@@ -1343,6 +1347,10 @@ document.addEventListener('click', (e) => {
       saveLists();
     }
     $('emodal').style.display = 'none'; editCid = null; renderLists();
+  } else if (act === 'eremove') {
+    const l = lists[activeList];
+    if (l && editCid) { verdict(activeList, editCid, null); delete l.channels[editCid]; saveLists(); }
+    $('emodal').style.display = 'none'; editCid = null; renderLists();
   } else if (act === 'covok') {
     const l = lists[activeList]; const ch = l?.channels?.[b.dataset.cid];
     if (ch?.coverage) { ch.coverage.confirmed = true; saveLists(); renderLists(); renderNotifs(); }
@@ -1372,6 +1380,13 @@ const campField = (label, id, val) =>
 const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}";
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
 const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
+const chanStatus = (l, r) => {
+  if (r.coverage) return '<a class="pill p-mid" href="' + esc(r.coverage.url) + '" target="_blank" title="Suspected coverage — click to open the video">Covered?</a>';
+  const ks = assignedKeys(l, r.channelId);
+  if (ks.some((k) => k.st === 'claimed' || k.st === 'redeemed')) return '<span class="pill p-good">Claimed</span>';
+  if (l.sent && l.sent[r.channelId]) return '<span class="pill p-good">Sent</span>';
+  return '<span class="pill p-bad">Not sent</span>';
+};
 const freeKeys = (l) => (l.keys || []).filter((k) => k.st === 'free');
 const KSTATUS = { sent: 'sent', claimed: 'claimed', redeemed: 'redeemed' };
 const KNEXT = { sent: 'claimed', claimed: 'redeemed', redeemed: 'sent' };
