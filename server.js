@@ -344,6 +344,12 @@ const HTML = `<!DOCTYPE html>
   .prochip{display:inline-block;background:var(--acc);color:#fff;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.8px;margin-bottom:8px}
   .tlink{color:var(--acc);cursor:pointer;font-size:12px;background:none;border:none;padding:0}
   .tlink:hover{text-decoration:underline}
+  .tplansum{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:18px}
+  .tpsname{font-weight:700;font-size:14px}
+  .tpsprice{color:var(--dim);font-size:12px;margin-top:2px}
+  .tlabel{display:block;font-size:12px;color:var(--dim);margin:0 0 6px}
+  .tlabel+input{margin-bottom:14px;padding:11px 12px}
+  .tfine{text-align:center;color:var(--dim);font-size:11.5px;margin-top:12px}
   .tdone{text-align:center;padding:14px 0}
   .tdone .big{font-size:40px;color:var(--good)}
   .mx:hover{color:var(--txt)}
@@ -1105,6 +1111,7 @@ function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
 function renderTiers() {
   const box = $('tierbox');
+  box.style.width = onb.step === 'plans' ? '' : '480px';
   if (onb.step === 'plans') {
     box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button>'
       + '<div class="ttitle">Choose your plan</div>'
@@ -1127,15 +1134,14 @@ function renderTiers() {
       + '<div id="tierr" style="color:var(--bad);font-size:11.5px;text-align:center;margin-top:12px;min-height:14px"></div>';
   } else if (onb.step === 'account') {
     box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button>'
-      + '<div class="ttitle" style="font-size:18px;text-align:left">Create your account<span class="planchip">' + (onb.plan === 'pro' ? 'Pro · ' + PRO_PRICE + '/mo' : 'Free') + '</span></div>'
-      + '<div class="tsub" style="text-align:left;margin-bottom:14px">Your lists sync automatically once you are in.</div>'
-      + '<label style="font-size:11px;color:var(--dim)">Email</label><input id="temail" type="email" style="margin-top:4px">'
-      + '<label style="font-size:11px;color:var(--dim);display:block;margin-top:10px">Password</label><input id="tpass" type="password" style="margin-top:4px">'
-      + '<div id="tierr" style="color:var(--bad);font-size:11.5px;margin-top:8px;min-height:14px"></div>'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">'
-      + '<button class="tlink" data-act="tierback">Back to plans</button>'
-      + '<button class="btn" data-act="tiercreate" style="padding:9px 20px;font-size:13px">' + (onb.plan === 'pro' ? 'Create account and continue' : 'Create account') + '</button>'
-      + '</div>';
+      + '<div class="ttitle" style="margin-top:4px">Create your account</div>'
+      + '<div class="tsub" style="margin-bottom:20px">Your lists sync automatically once you are in.</div>'
+      + '<div class="tplansum"><div><div class="tpsname">' + (onb.plan === 'pro' ? 'Pro' : 'Free') + '</div><div class="tpsprice">' + (onb.plan === 'pro' ? PRO_PRICE + '/month · cancel anytime' : 'Free forever') + '</div></div><button class="tlink" data-act="tierback">Change plan</button></div>'
+      + '<label class="tlabel">Email</label><input id="temail" type="email" placeholder="you@studio.com" autocomplete="email">'
+      + '<label class="tlabel">Password</label><input id="tpass" type="password" placeholder="6+ characters" autocomplete="new-password">'
+      + '<div id="tierr" style="color:var(--bad);font-size:12px;min-height:16px;margin-top:10px"></div>'
+      + '<button class="btn tcta" data-act="tiercreate" style="margin-top:6px">' + (onb.plan === 'pro' ? 'Create account and continue to checkout' : 'Create account') + '</button>'
+      + '<div class="tfine">' + (onb.plan === 'pro' ? 'Secure checkout via Stripe. Cancel anytime.' : 'No card required. Upgrade anytime.') + '</div>';
     setTimeout(() => $('temail').focus(), 50);
   } else {
     box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button><div class="tdone">'
