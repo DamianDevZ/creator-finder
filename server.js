@@ -788,7 +788,7 @@ async function maybeExpand() {
       if (!r) break;
       if (!pool[r.channelId]) {
         const nc = notesCache[r.channelId];
-        if (nc) { r.aiNote = nc.note || nc; r.aiNoteCard = nc.card || null; r.aiPending = false; }
+        if (nc) { const ns = typeof nc === 'string' ? { note: nc } : nc; r.aiNote = ns.note || ''; r.aiNoteCard = ns.card || null; r.aiPending = false; }
         pool[r.channelId] = r; added++;
       }
     }
@@ -854,6 +854,7 @@ let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = f
 const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
 const gameAppids = {}; // lowercase game name -> steam appid, for Covers links
 
+const noteOf = (r) => (typeof r?.aiNote === 'string' ? r.aiNote : r?.aiNote?.note) || (r?.notes || [])[0] || '';
 const snap = (r) => ({
   channelId: r.channelId, channel: r.channel, url: r.url, thumb: r.thumb,
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
@@ -920,7 +921,7 @@ function detailCard(r, btns, status) {
     + '<div class="qstat"><div class="qs-l">Last post</div><div class="qs-v">' + fmtAge(r.daysSince) + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(((s) => s ? s[0].toUpperCase() + s.slice(1) : s)(r.aiNoteCard || r.aiNote || (r.notes || []).join(' · ') || '—'))) + '</div>'
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(((s) => s ? s[0].toUpperCase() + s.slice(1) : s)(r.aiNoteCard || noteOf(r) || '—'))) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + (r.coverage ? '<div class="qc-lbl">' + (r.coverage.confirmed ? 'Covered' : 'Coverage?') + '</div><div class="qc-val">'
       + '<a href="' + esc(r.coverage.url) + '" target="_blank" style="color:inherit"><b>' + esc(r.coverage.title) + '</b></a>'
@@ -1312,7 +1313,7 @@ document.addEventListener('click', (e) => {
     editCid = b.dataset.cid;
     $('echname').textContent = r.channel;
     $('ealias').value = r.alias || '';
-    $('enote').value = r.aiNote || (r.notes || []).join(' · ');
+    $('enote').value = noteOf(r) || (r.notes || []).join(' · ');
     $('egames').value = (r.games || []).join(', ');
     $('eemails').value = (r.emails || []).join(', ');
     $('emodal').style.display = 'flex';
@@ -1388,7 +1389,7 @@ const KSTATUS = { sent: 'sent', claimed: 'claimed', redeemed: 'redeemed' };
 const KNEXT = { sent: 'claimed', claimed: 'redeemed', redeemed: 'sent' };
 
 function fillTemplate(tpl, c, camp, keyText) {
-  let note = (c.aiNote || (c.notes || [])[0] || 'cover games like this').replace(/[.\s]+$/, '');
+  let note = (noteOf(c) || 'cover games like this').replace(/[.\s]+$/, '');
   note = note.charAt(0).toLowerCase() + note.slice(1);
   const nKeys = keyText ? keyText.split('\\n').filter(Boolean).length : 0;
   const map = {
@@ -1629,7 +1630,7 @@ async function requestNotes(list) {
       chunk.forEach((r) => {
         r.aiPending = false;
         const n = j.notes && j.notes[r.channelId];
-        if (n) { r.aiNote = n.note || n; r.aiNoteCard = n.card || null; notesCache[r.channelId] = n; }
+        if (n) { const ns = typeof n === 'string' ? { note: n } : n; if (ns.note) { r.aiNote = ns.note; r.aiNoteCard = ns.card || null; notesCache[r.channelId] = ns; } }
       });
       savePools(); renderLists();
     } catch { chunk.forEach((r) => { r.aiPending = false; }); }
