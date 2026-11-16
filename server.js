@@ -70,7 +70,7 @@ const setPlan = (uid, plan) =>
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({ user_id: uid, plan, updated_at: new Date().toISOString() }),
   }).catch(() => {});
-const FREE_SCANS_PER_DAY = 3;
+const FREE_SCANS_PER_DAY = 2;
 
 // ---- Creator/game knowledge graph --------------------------------------
 // Every scan logs which creators cover which games; known creators merge
@@ -1114,7 +1114,7 @@ function renderTiers() {
       + '<div class="tcard">'
       + '<div class="tname">FREE</div>'
       + '<div class="tprice">$0<span> forever</span></div>'
-      + '<div class="tfeats">' + feat('3 game analyses per day') + feat('Unlimited lists') + feat('5 creator adds per day') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
+      + '<div class="tfeats">' + feat('Unlimited lists') + feat('2 game analyses per day') + feat('5 creator adds per day') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
       + (session ? '<div class="tcur">Current plan</div>' : '<button class="ltab tcta" data-act="tierpick" data-v="free">Continue with Free</button>')
       + '</div>'
       + '<div class="tcard pro">'
