@@ -320,7 +320,7 @@ const HTML = `<!DOCTYPE html>
   .lpmi{padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer}
   .lpmi:hover{background:var(--bg3)}
   .lpmi.on{color:var(--acc);font-weight:600}
-  .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
+  .lmodal{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
   .lmbox{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .mx{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px}
   .lmbox.wide{width:640px;max-width:92vw}
