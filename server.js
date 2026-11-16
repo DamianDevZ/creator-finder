@@ -71,6 +71,29 @@ const setPlan = (uid, plan) =>
     body: JSON.stringify({ user_id: uid, plan, updated_at: new Date().toISOString() }),
   }).catch(() => {});
 const FREE_SCANS_PER_DAY = 2;
+const FREE_ADDS_PER_DAY = 5;
+
+const ipOf = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+// Per-IP throttle on auth POSTs: 10/minute stops brute force and credential stuffing.
+const authHits = new Map();
+function authLimited(req) {
+  const now = Date.now(), ip = ipOf(req);
+  const h = (authHits.get(ip) || []).filter((t) => now - t < 60e3);
+  if (h.length >= 10) return true;
+  h.push(now); authHits.set(ip, h);
+  if (authHits.size > 5000) authHits.clear();
+  return false;
+}
+// Errors always go to the log; optionally mirror to a Discord/Slack-style webhook.
+const logErr = (ctx, e) => {
+  console.error(`[${ctx}]`, e);
+  const hook = process.env.ERROR_WEBHOOK_URL;
+  if (hook) fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `**[creator-finder] ${ctx}** ${String(e?.message || e).slice(0, 500)}` }) }).catch(() => {});
+};
+const usageBump = (subject) => sbRest('/rpc/bump_scans', {
+  method: 'POST',
+  body: JSON.stringify({ p_subject: subject, p_day: new Date().toISOString().slice(0, 10) }),
+}).then((r) => r.json()).catch(() => null);
 
 // ---- Creator/game knowledge graph --------------------------------------
 // Every scan logs which creators cover which games; known creators merge
@@ -601,6 +624,36 @@ const HTML = `<!DOCTYPE html>
         <button class="btn" data-act="authdo" data-v="signup" style="padding:8px 16px;font-size:13px">Sign up</button>
       </div>
       <div style="text-align:center;margin-top:12px"><button class="tlink" data-act="tiers">New here? See plans and create an account</button></div>
+      <div style="text-align:center;margin-top:6px"><button class="tlink" data-act="forgot" style="color:var(--dim)">Forgot password?</button></div>
+    </div>
+  </div>
+
+  <div class="lmodal" id="forgotmodal" style="display:none">
+    <div class="lmbox" style="position:relative;width:360px">
+      <button class="mx" data-act="forgotcancel">✕</button>
+      <b>Reset password</b>
+      <div class="meta" style="margin:4px 0 12px;font-size:12px">Enter your account email and we will send a reset link.</div>
+      <label style="font-size:11px;color:var(--dim)">Email</label>
+      <input id="femail" type="email" style="margin-top:4px">
+      <div id="ferr" style="color:var(--bad);font-size:11.5px;margin-top:8px;min-height:15px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="ltab" data-act="forgotcancel">Cancel</button>
+        <button class="btn" data-act="forgotsend" style="padding:8px 16px;font-size:13px">Send reset link</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lmodal" id="resetmodal" style="display:none">
+    <div class="lmbox" style="position:relative;width:360px">
+      <button class="mx" data-act="resetcancel">✕</button>
+      <b>Choose a new password</b>
+      <div class="meta" style="margin:4px 0 12px;font-size:12px">Your reset link is verified. Set a new password to finish.</div>
+      <label style="font-size:11px;color:var(--dim)">New password</label>
+      <input id="rpass" type="password" style="margin-top:4px" autocomplete="new-password">
+      <div id="rerr" style="color:var(--bad);font-size:11.5px;margin-top:8px;min-height:15px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" data-act="resetdo" style="padding:8px 16px;font-size:13px">Update password</button>
+      </div>
     </div>
   </div>
 
@@ -1070,10 +1123,12 @@ async function cloudPull() {
   lists = remoteNewer ? { ...lists, ...remote } : { ...remote, ...lists };
   saveLists(); renderLists();
 }
+let resetToken = '';
 if (/access_token=/.test(location.hash)) {
   const h = new URLSearchParams(location.hash.slice(1));
   const at = h.get('access_token');
-  if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
+  if (at && h.get('type') === 'recovery') { resetToken = at; setTimeout(() => { $('resetmodal').style.display = 'flex'; }, 0); }
+  else if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
   history.replaceState(null, '', location.pathname + location.search);
 }
 async function initSession() {
@@ -1097,13 +1152,20 @@ initSession();
 
 // ---- Plans ---------------------------------------------------------------
 const PRO_PRICE = '$5';
-const PLAN_LIMITS = { guest: { adds: 5 }, free: { adds: 5 }, pro: { adds: Infinity } };
-const ADDSKEY = 'cf_adds';
-const addsToday = () => { try { const j = JSON.parse(localStorage.getItem(ADDSKEY)); return j && j.d === new Date().toDateString() ? (j.n || 0) : 0; } catch { return 0; } };
-const addsLeft = () => Math.max(0, PLAN_LIMITS[plan()].adds - addsToday());
-const bumpAdds = () => localStorage.setItem(ADDSKEY, JSON.stringify({ d: new Date().toDateString(), n: addsToday() + 1 }));
 const plan = () => localStorage.getItem('cf_dev_plan') || (session && session.plan) || 'guest';
 const isPro = () => plan() === 'pro';
+// Creator adds are enforced server-side (per account, or per IP for guests).
+// Fails open on network errors so a blip never blocks a legit accept.
+async function addAllowed() {
+  if (isPro()) return true;
+  const r = await fetch('/api/usage/add', { method: 'POST', headers: scanHeaders() }).catch(() => null);
+  if (r && r.status === 429) {
+    const j = await r.json().catch(() => ({}));
+    openTiers(j.error || 'Daily add limit reached. Pro is unlimited.');
+    return false;
+  }
+  return true;
+}
 async function refreshMe() {
   if (!session) return;
   const j = await fetch('/api/me', { headers: { Authorization: 'Bearer ' + session.at } }).then((r) => r.ok ? r.json() : null).catch(() => null);
@@ -1193,17 +1255,13 @@ const snap = (r) => ({
 const poolFor = (game) => pools[game] || {};
 const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
 
-function verdict(listName, cid, v, quiet) {
+async function verdict(listName, cid, v, quiet) {
   const l = lists[listName];
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
-  if (v === 'a' && l.verdicts[cid] !== 'a' && addsLeft() <= 0) {
-    openTiers('You used your 5 free creator adds for today. Resets at midnight, or go Pro for unlimited.');
-    return;
-  }
+  if (v === 'a' && l.verdicts[cid] !== 'a' && !(await addAllowed())) return;
   const wasA = l.verdicts[cid] === 'a';
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
-  if (v === 'a' && !wasA) bumpAdds();
   // Leaving Accepted releases that creator's steam keys back to the pool.
   if (v !== 'a' && l.keys) l.keys.forEach((k) => { if (k.cid === cid) { k.st = 'free'; delete k.cid; delete k.at; } });
   const r = poolFor(lastGame)[cid] || lastResults.find((x) => x.channelId === cid);
@@ -1450,7 +1508,7 @@ function renderLists() {
   if (triageTab === 'camp' && l) { updKeyCount(); renderPreviews(); }
 }
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   if (lpOpen && !e.target.closest('.lpmenu') && !e.target.closest('[data-act="lpmenu"]')) {
     lpOpen = false; renderLists();
   }
@@ -1584,6 +1642,36 @@ document.addEventListener('click', (e) => {
       }).catch(() => { b.disabled = false; $('aerr').textContent = 'Network error.'; });
   } else if (act === 'gauth') {
     location.href = '/api/auth/google';
+  } else if (act === 'forgot') {
+    $('authmodal').style.display = 'none';
+    $('ferr').textContent = '';
+    $('forgotmodal').style.display = 'flex';
+    setTimeout(() => $('femail').focus(), 50);
+  } else if (act === 'forgotcancel') {
+    $('forgotmodal').style.display = 'none';
+  } else if (act === 'forgotsend') {
+    const email = $('femail').value.trim();
+    if (!email) { $('ferr').textContent = 'Enter your email.'; return; }
+    b.disabled = true; $('ferr').textContent = '';
+    fetch('/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+      .then(() => { b.disabled = false; $('ferr').style.color = 'var(--good)'; $('ferr').textContent = 'If that email is registered, a reset link is on its way.'; })
+      .catch(() => { b.disabled = false; $('ferr').textContent = 'Network error.'; });
+  } else if (act === 'resetcancel') {
+    $('resetmodal').style.display = 'none'; resetToken = '';
+  } else if (act === 'resetdo') {
+    const pw = $('rpass').value;
+    if (!pw || pw.length < 6) { $('rerr').textContent = 'Password must be at least 6 characters.'; return; }
+    b.disabled = true; $('rerr').textContent = '';
+    fetch('/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: resetToken, password: pw }) })
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(({ ok, j }) => {
+        b.disabled = false;
+        if (!ok) { $('rerr').textContent = j.error || j.msg || 'Reset failed — request a new link.'; return; }
+        $('resetmodal').style.display = 'none'; $('rpass').value = ''; resetToken = '';
+        $('authmodal').style.display = 'flex';
+        $('aerr').style.color = 'var(--good)'; $('aerr').textContent = 'Password updated — log in with the new one.';
+        setTimeout(() => { $('aerr').style.color = 'var(--bad)'; }, 4000);
+      }).catch(() => { b.disabled = false; $('rerr').textContent = 'Network error.'; });
   } else if (act === 'logout') {
     saveSession(null); renderLists();
   } else if (act === 'tiers') {
@@ -1621,19 +1709,13 @@ document.addEventListener('click', (e) => {
     $('amodal').style.display = 'none';
   } else if (act === 'apick') {
     const l = lists[activeList]; if (!l) return;
-    if (l.verdicts[b.dataset.cid] !== 'a' && addsLeft() <= 0) {
-      $('amodal').style.display = 'none';
-      openTiers('You used your 5 free creator adds for today. Resets at midnight, or go Pro for unlimited.');
-      return;
-    }
+    if (l.verdicts[b.dataset.cid] !== 'a' && !(await addAllowed())) { $('amodal').style.display = 'none'; return; }
     b.style.pointerEvents = 'none'; b.style.opacity = '.5';
     fetch('/api/channel-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: b.dataset.cid }) })
       .then((r) => r.json()).then((p) => {
         if (p.error) { b.style.pointerEvents = ''; b.style.opacity = ''; return; }
         l.channels ||= {}; l.verdicts ||= {};
-        const wasA = l.verdicts[p.channelId] === 'a';
         l.channels[p.channelId] = snap(p); l.verdicts[p.channelId] = 'a';
-        if (!wasA) bumpAdds();
         saveLists(); $('amodal').style.display = 'none'; renderLists();
         requestNotes([l.channels[p.channelId]]).then(() => { if (l.channels[p.channelId].aiNote) saveLists(); });
       }).catch(() => { b.style.pointerEvents = ''; b.style.opacity = ''; });
@@ -2134,6 +2216,20 @@ export const handler = async (req, res) => {
       const b = await readBody(req);
       return json(200, await buildFingerprint(b.input, { manualTags: list(b.tags) }));
     }
+    if (req.method === 'POST' && url.pathname === '/api/usage/add') {
+      // Creator adds are counted server-side like scans: per account, or per IP
+      // for guests. 'adds:' subjects share the usage table with scan rows.
+      if (!SB_URL || !SB_KEY) return json(200, { ok: true });
+      const bypass = process.env.DEV_SCAN_KEY && req.headers['x-dev-key'] === process.env.DEV_SCAN_KEY;
+      const bearer = (req.headers.authorization || '').replace(/^Bearer /i, '');
+      const u = bearer ? await sbUser(bearer) : null;
+      const p = u ? await ensureProfile(u.id) : { plan: 'guest' };
+      if (p.plan === 'pro' || bypass) return json(200, { ok: true });
+      const used = await usageBump(`adds:${u ? `u:${u.id}` : `ip:${ipOf(req)}`}`);
+      if (typeof used === 'number' && used > FREE_ADDS_PER_DAY)
+        return json(429, { error: `Daily add limit reached. Free gets ${FREE_ADDS_PER_DAY} creator adds per day — Pro is unlimited.` });
+      return json(200, { ok: true });
+    }
     if (req.method === 'POST' && url.pathname === '/api/find') {
       const b = await readBody(req);
       // Scan credits: only the first batch of an analysis counts; continuation
@@ -2145,12 +2241,8 @@ export const handler = async (req, res) => {
         const u = bearer ? await sbUser(bearer) : null;
         const p = u ? await ensureProfile(u.id) : { plan: 'guest' };
         if (p.plan !== 'pro') {
-          const subject = u ? `u:${u.id}` : `ip:${String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim()}`;
-          const r = await sbRest('/rpc/bump_scans', {
-            method: 'POST',
-            body: JSON.stringify({ p_subject: subject, p_day: new Date().toISOString().slice(0, 10) }),
-          });
-          const used = await r.json().catch(() => null);
+          const subject = u ? `u:${u.id}` : `ip:${ipOf(req)}`;
+          const used = await usageBump(subject);
           if (typeof used === 'number' && used > FREE_SCANS_PER_DAY)
             return json(429, { error: `Daily scan limit reached. Free gets ${FREE_SCANS_PER_DAY} game analyses per day — Pro is unlimited.` });
         }
@@ -2209,8 +2301,46 @@ h2{color:#e6ebf5;font-size:18px;margin:32px 0 10px}p{margin:12px 0}ul{padding-le
 strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;padding:8px 16px;border:1px solid #2a3142;border-radius:8px;text-decoration:none}
 </style></head><body>${html}<a class="back" href="/">← Back to Creator Finder</a></body></html>`);
     }
+    if (req.method === 'GET' && (url.pathname === '/api/admin/stats' || url.pathname === '/admin')) {
+      const key = req.headers['x-admin-key'] || url.searchParams.get('key') || '';
+      if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return json(403, { error: 'forbidden' });
+      const weekAgo = new Date(Date.now() - 7 * DAY).toISOString().slice(0, 10);
+      const sbCount = async (table) => {
+        const r = await sbRest(`/${table}?select=*`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).catch(() => null);
+        const m = /\/(\d+)/.exec(r?.headers.get('content-range') || '');
+        return m ? +m[1] : null;
+      };
+      const usage = await sbRest(`/cf_usage?day=gte.${weekAgo}&select=subject,day,scans`).then((r) => r.json()).catch(() => []);
+      const profiles = await sbRest('/cf_profiles?select=plan').then((r) => r.json()).catch(() => []);
+      const days = {};
+      for (const row of Array.isArray(usage) ? usage : []) {
+        const d = (days[row.day] ||= { scans: 0, adds: 0, scanners: new Set(), adders: new Set() });
+        if (row.subject.startsWith('adds:')) { d.adds += row.scans; d.adders.add(row.subject); }
+        else { d.scans += row.scans; d.scanners.add(row.subject); }
+      }
+      const stats = {
+        plans: Object.fromEntries((Array.isArray(profiles) ? profiles : []).reduce((m, p) => m.set(p.plan || 'free', (m.get(p.plan || 'free') || 0) + 1), new Map())),
+        byDay: Object.entries(days).sort().map(([day, d]) => ({ day, scans: d.scans, adds: d.adds, scanners: d.scanners.size, adders: d.adders.size })),
+        graph: { games: await sbCount('cf_games'), creators: await sbCount('cf_creators'), edges: await sbCount('cf_coverage') },
+      };
+      if (url.pathname === '/api/admin/stats') return json(200, stats);
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      return res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder — stats</title>
+<style>body{background:#0b0e14;color:#c8d0e0;font:14px/1.6 system-ui;max-width:720px;margin:0 auto;padding:40px 20px}
+h1{color:#fff;font-size:20px}h2{color:#8b9dff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:28px 0 8px}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid #2a3142;padding:7px 12px;text-align:left;font-size:13px}th{color:#8b9dff}
+.big{display:flex;gap:14px;flex-wrap:wrap}.big div{background:#11151f;border:1px solid #2a3142;border-radius:10px;padding:14px 20px}
+.big b{display:block;color:#fff;font-size:22px}</style></head><body>
+<h1>Creator Finder stats</h1>
+<h2>Plans</h2><div class="big">${Object.entries(stats.plans).map(([p, n]) => `<div><b>${n}</b>${p}</div>`).join('')}</div>
+<h2>Knowledge graph</h2><div class="big">${Object.entries(stats.graph).map(([k, n]) => `<div><b>${n ?? '?'}</b>${k}</div>`).join('')}</div>
+<h2>Last 7 days</h2><table><tr><th>Day</th><th>Scans</th><th>Adds</th><th>Scanners</th><th>Adders</th></tr>
+${stats.byDay.map((d) => `<tr><td>${d.day}</td><td>${d.scans}</td><td>${d.adds}</td><td>${d.scanners}</td><td>${d.adders}</td></tr>`).join('') || '<tr><td colspan="5">no usage yet</td></tr>'}</table>
+</body></html>`);
+    }
     if (url.pathname.startsWith('/api/auth/')) {
       if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
+      if (req.method === 'POST' && url.pathname !== '/api/auth/refresh' && authLimited(req)) return json(429, { error: 'Too many attempts. Try again in a minute.' });
       if (url.pathname === '/api/auth/google' && req.method === 'GET') {
         const host = req.headers.host || 'localhost';
         const proto = /^(localhost|127\.)/.test(host) ? 'http' : 'https';
@@ -2242,6 +2372,26 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       if (url.pathname === '/api/auth/refresh' && req.method === 'POST') {
         const r = await sbAuth('/token?grant_type=refresh_token', { refresh_token: b.refresh_token });
         return json(r.status, await r.json().catch(() => ({})));
+      }
+      if (url.pathname === '/api/auth/forgot' && req.method === 'POST') {
+        // Always 200 — don't reveal whether the email is registered.
+        const host = req.headers.host || 'localhost';
+        const proto = /^(localhost|127\.)/.test(host) ? 'http' : 'https';
+        await fetch(`${SB_URL}/auth/v1/recover`, {
+          method: 'POST',
+          headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: b.email, redirect_to: `${proto}://${host}/` }),
+        }).catch(() => {});
+        return json(200, { ok: true });
+      }
+      if (url.pathname === '/api/auth/reset' && req.method === 'POST') {
+        const r = await fetch(`${SB_URL}/auth/v1/user`, {
+          method: 'PUT',
+          headers: { apikey: SB_KEY, Authorization: `Bearer ${b.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: b.password }),
+        });
+        if (!r.ok) { const j = await r.json().catch(() => ({})); return json(r.status, { error: j.msg || j.error || 'Reset failed' }); }
+        return json(200, { ok: true });
       }
       return json(404, { error: 'unknown auth route' });
     }
@@ -2329,11 +2479,14 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
     res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
     res.end(HTML);
   } catch (e) {
+    logErr(url.pathname, e);
     json(500, { error: e.message });
   }
 };
 
 export default handler;
+
+process.on('unhandledRejection', (e) => logErr('unhandledRejection', e));
 
 if (!process.env.VERCEL) {
   createServer(handler).listen(PORT, () => console.log(`http://localhost:${PORT}`));
