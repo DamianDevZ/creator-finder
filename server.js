@@ -215,7 +215,7 @@ const HTML = `<!DOCTYPE html>
   .cs-ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(91,140,255,.14);color:var(--acc);font-size:13px;flex-shrink:0}
   .ptabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel2)}
   .ptab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:14px;font-size:14px;font-weight:700;color:var(--dim);cursor:pointer;font-family:inherit}
-  .ptab.on{color:var(--txt);border-bottom-color:var(--acc)}
+  .ptab.on{color:var(--txt);border-bottom-color:var(--acc);background:var(--panel)}
   .ptab:hover{color:var(--txt)}
   .keyrow{display:grid;grid-template-columns:minmax(0,1fr) 86px 140px 66px 86px 26px;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);font-size:12px}
   .keyrow.khead{border-top:none;padding:0 4px 8px;color:var(--dim);font-size:10px;letter-spacing:.7px;text-transform:uppercase;font-weight:700}
@@ -1112,7 +1112,7 @@ function renderLists() {
   }
   el.innerHTML = l
     ? '<div class="panel" style="margin-top:16px;padding:0;overflow:hidden"><div class="ptabs">'
-      + '<button class="ptab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">👤 Creators</button>'
+      + '<button class="ptab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">&#x1F464;&#xFE0E; Creators</button>'
       + '<button class="ptab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp">✉ Campaign</button>'
       + '</div><div style="padding:20px">' + body + '</div></div>'
     : '<div class="panel" style="margin-top:16px">' + body + '</div>';
@@ -1340,6 +1340,15 @@ document.addEventListener('click', (e) => {
     const l = lists[activeList];
     if (l && editCid) { verdict(activeList, editCid, null); delete l.channels[editCid]; saveLists(); }
     $('emodal').style.display = 'none'; editCid = null; renderLists();
+  } else if (act === 'dtoggle') {
+    const cid = el.dataset.cid;
+    if (draftOpen.has(cid)) draftOpen.delete(cid); else draftOpen.add(cid);
+    renderPreviews();
+  } else if (act === 'dexpall' || act === 'dcolall') {
+    const l0 = lists[activeList];
+    draftOpen.clear();
+    if (act === 'dexpall' && l0) accChannels(l0).forEach((r) => { if (assignedKeys(l0, r.channelId).length) draftOpen.add(r.channelId); });
+    renderPreviews();
   } else if (act === 'covok') {
     const l = lists[activeList]; const ch = l?.channels?.[b.dataset.cid];
     if (ch?.coverage) { ch.coverage.confirmed = true; saveLists(); renderLists(); renderNotifs(); }
@@ -1443,10 +1452,12 @@ function assignKeys(l, cid) {
   return true;
 }
 
+let draftOpen = new Set();
 function draftRow(l, r, camp, free) {
   const to = (r.emails || [])[0];
   const assigned = assignedKeys(l, r.channelId);
   const sent = l.sent && l.sent[r.channelId];
+  const open = draftOpen.has(r.channelId);
   const av = r.thumb ? '<img class="dc-av" src="' + r.thumb + '">' : '<div class="dc-av"></div>';
   let lower;
   if (!assigned.length) {
@@ -1462,7 +1473,7 @@ function draftRow(l, r, camp, free) {
       '<span class="kchip ' + (k.st === 'sent' || k.st === 'assigned' ? '' : k.st) + '"'
       + (sent ? ' data-act="keycycle" data-cid="' + r.channelId + '" data-k="' + esc(k.k) + '" title="click: ' + k.st + ' → ' + KNEXT[k.st] + '"' : ' title="' + k.st + ' — locked when marked sent"')
       + '>' + esc(k.k) + '</span>').join('') + '</div>'
-      + '<div class="dmail">'
+      + '<div class="dmail" style="display:' + (open ? 'block' : 'none') + '">'
       + '<div class="dm-head"><span>To: <b>' + esc(to || '—') + '</b></span>'
       + '<span>Subject: <b>' + esc(fillTemplate(camp.subject || '', r, camp, '')) + '</b></span></div>'
       + '<div class="dm-body">' + esc(fillTemplate(camp.template, r, camp, keyTextFor(l, r.channelId))) + '</div></div>';
@@ -1473,7 +1484,8 @@ function draftRow(l, r, camp, free) {
     + '<div class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file') + '</div></div>'
     + (sent ? '<span class="pill p-good" style="font-size:10px">Sent</span>' : '')
     + (assigned.length
-      ? '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
+      ? '<button class="vb" data-act="dtoggle" data-cid="' + r.channelId + '">' + (open ? 'Collapse' : 'Expand') + '</button>'
+      + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
       + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
       + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
       : '')
@@ -1490,6 +1502,8 @@ function renderPreviews() {
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
     + '<button class="ltab" data-act="regenn" style="font-size:11px" title="Regenerate AI notes with the current phrasing">↻ Notes</button>'
     + '<span style="margin-left:auto"></span>'
+    + '<button class="ltab" data-act="dexpall" style="font-size:11px">Expand all</button>'
+    + '<button class="ltab" data-act="dcolall" style="font-size:11px">Collapse all</button>'
     + (undrafted ? '<button class="btn" data-act="draftall" style="padding:7px 18px;font-size:12px">Draft all (' + undrafted + ')</button>' : '')
     + '</div>'
     + (rows.length ? rows.map((r) => draftRow(l, r, camp, free)).join('')
