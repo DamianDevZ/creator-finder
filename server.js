@@ -215,7 +215,7 @@ const HTML = `<!DOCTYPE html>
   .cs-ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(91,140,255,.14);color:var(--acc);font-size:13px;flex-shrink:0}
   .ptabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel2)}
   .ptab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:14px;font-size:14px;font-weight:700;color:var(--dim);cursor:pointer;font-family:inherit}
-  .ptab.on{color:var(--txt);border-bottom-color:var(--acc);background:var(--panel)}
+  .ptab.on{color:var(--txt);background:var(--panel)}
   .ptab:hover{color:var(--txt)}
   .keyrow{display:grid;grid-template-columns:minmax(0,1fr) 86px 140px 66px 86px 26px;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);font-size:12px}
   .keyrow.khead{border-top:none;padding:0 4px 8px;color:var(--dim);font-size:10px;letter-spacing:.7px;text-transform:uppercase;font-weight:700}
@@ -1062,9 +1062,9 @@ function renderLists() {
         + campField('Subject', 'csubject', c.subject || '') + '</div>')
         + campSec('<span class="cs-ic">✉</span>Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="margin-left:auto;font-size:11px;text-transform:none">✦ Generate with AI</button>',
           '<textarea id="ctemplate" rows="16" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
-          + esc(c.template || DEF_TPL) + '</textarea>'
+          + esc(tplFor(c)) + '</textarea>'
           + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} what they do · {keyoffer} count-aware key offer · {keys} key list · {game} · {dev}</div>'
-          + '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
+          + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button class="ltab" data-act="creset" style="font-size:11px">Reset to default</button><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
     } else if (campTab === 'keys') {
       const chans = l.channels || {};
       body += campSec('<span class="cs-ic">⚿</span>Add keys',
@@ -1248,6 +1248,9 @@ document.addEventListener('click', (e) => {
       .finally(() => { btn.disabled = false; btn.textContent = '✦ Generate with AI'; });
   } else if (act === 'csave') {
     saveCampaign(); renderPreviews();
+  } else if (act === 'creset') {
+    if ($('ctemplate')) $('ctemplate').value = DEF_TPL;
+    saveCampaign(); renderLists();
   } else if (act === 'copyc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
@@ -1365,6 +1368,11 @@ const campField = (label, id, val) =>
   '<div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">' + label + '</div>'
   + '<input id="' + id + '" value="' + esc(val) + '" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none"></div>';
 const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, so I think {game} would be a really good fit for your channel.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions, and thanks for your time.\\n\\nKind regards,\\n{dev}";
+const OLD_TPLS = [
+  "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}",
+  "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}",
+];
+const tplFor = (c) => (!c.template || OLD_TPLS.includes(c.template) ? DEF_TPL : c.template);
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
 const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
 const chanStatus = (l, r) => {
@@ -1404,7 +1412,7 @@ function readCampForm() {
     dev: gv('cdev') ?? c.dev ?? s.dev ?? '',
     email: gv('cemail') ?? c.email ?? s.email ?? '',
     subject: gv('csubject') ?? c.subject ?? '',
-    template: $('ctemplate') ? $('ctemplate').value : (c.template || DEF_TPL),
+    template: $('ctemplate') ? $('ctemplate').value : tplFor(c),
   };
 }
 const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm(), keyTextFor(l, r.channelId));
