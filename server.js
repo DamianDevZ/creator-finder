@@ -849,6 +849,7 @@ for (const [n, l] of Object.entries(lists)) {
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
+let creatorTab = 'acc', campTab = 'tmpl';
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
 const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
 const gameAppids = {}; // lowercase game name -> steam appid, for Covers links
@@ -882,12 +883,12 @@ function updTabs() {
   if (!l) return;
   const cnt = { queue: queueFor(activeList).length, acc: 0, rej: 0 };
   for (const v of Object.values(l.verdicts || {})) cnt[v === 'a' ? 'acc' : 'rej']++;
-  for (const [k, label] of [['queue', 'Queue'], ['acc', 'Accepted'], ['rej', 'Rejected'], ['camp', '✉ Campaign']]) {
-    const t = $('lists').querySelector('[data-act="tab"][data-v="' + k + '"]');
-    if (t) t.textContent = k === 'camp'
-      ? '✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '')
-      : label + ' (' + cnt[k] + ')';
+  for (const [k, label] of [['acc', 'Accepted'], ['rej', 'Rejected']]) {
+    const t = $('lists').querySelector('[data-act="ctab"][data-v="' + k + '"]');
+    if (t) t.textContent = label + ' (' + cnt[k] + ')';
   }
+  const ct = $('lists').querySelector('[data-act="tab"][data-v="camp"]');
+  if (ct) ct.textContent = '✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '');
 }
 
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
@@ -1000,18 +1001,17 @@ function renderLists() {
 
   let body = '<div class="listbar" style="margin-bottom:14px">'
     + '<div style="position:relative">'
-    + '<button class="lpbtn" data-act="lpmenu">'
-    + (l ? esc(activeList) : '<span style="color:var(--dim)">Select list…</span>')
-    + '<span class="car">▾</span></button>'
-    + (lpOpen
-      ? '<div class="lpmenu">'
-      + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
-      + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
-      : '')
+    + (l
+      ? '<span style="font-weight:700;font-size:14px">' + esc(activeList) + '</span>'
+      : '<button class="lpbtn" data-act="lpmenu"><span style="color:var(--dim)">Select list…</span><span class="car">▾</span></button>'
+      + (lpOpen
+        ? '<div class="lpmenu">'
+        + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
+        + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
+        : ''))
     + '</div>'
     + (l
-      ? '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
-      + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+      ? '<button class="ltab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">Creators</button>'
       + '<button class="ltab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp">✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '') + '</button>'
       + '<span style="margin-left:auto"></span>'
       + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
@@ -1060,35 +1060,62 @@ function renderLists() {
         + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>');
     }
   } else if (triageTab === 'camp') {
-    if ($('ctemplate')) saveCampaign(); // preserve unsaved edits across re-renders
-    const c = l.campaign || {};
-    const s = senderPrefs();
-    const rows = accChannels(l);
-    body += campSec('1 · Your details',
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
-      + campField('Game', 'cgame', c.game || lastGame || '')
-      + campField('Your name', 'cdev', c.dev || s.dev || '')
-      + campField('Your email', 'cemail', c.email || s.email || '')
-      + '</div><div style="margin-top:10px">'
-      + campField('Subject', 'csubject', c.subject || '') + '</div>')
-      + campSec('2 · Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none">✦ Generate with AI</button>',
-        '<textarea id="ctemplate" rows="9" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
-        + esc(c.template || DEF_TPL) + '</textarea>'
-        + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>')
-      + campSec('3 · Steam keys',
-        '<textarea id="ckeys" rows="4" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace">'
-        + esc((l.keys || []).map((k) => k.k).join('\\n')) + '</textarea>'
-        + '<div class="meta" id="ckeycount" style="font-size:10.5px;margin-top:4px"></div>')
-      + campSec('4 · Drafts — ' + rows.length + ' accepted ' + (rows.length === 1 ? 'creator' : 'creators'),
-        '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & refresh drafts</button></div>'
-        + '<div id="cpreviews"></div>');
+    if ($('ctemplate') || $('ckeys')) saveCampaign(); // preserve unsaved edits across re-renders
+    body += '<div style="display:flex;gap:8px;margin-bottom:14px">'
+      + [['tmpl', 'Template'], ['keys', 'Keys'], ['drafts', 'Drafts']].map(([k, lbl]) =>
+        '<button class="ltab' + (campTab === k ? ' on' : '') + '" data-act="camptab" data-v="' + k + '">' + lbl + '</button>').join('')
+      + '</div>';
+    if (campTab === 'tmpl') {
+      const c = l.campaign || {};
+      const s = senderPrefs();
+      body += campSec('Your details',
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+        + campField('Game', 'cgame', c.game || lastGame || '')
+        + campField('Your name', 'cdev', c.dev || s.dev || '')
+        + campField('Your email', 'cemail', c.email || s.email || '')
+        + '</div><div style="margin-top:10px">'
+        + campField('Subject', 'csubject', c.subject || '') + '</div>')
+        + campSec('Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none">✦ Generate with AI</button>',
+          '<textarea id="ctemplate" rows="10" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
+          + esc(c.template || DEF_TPL) + '</textarea>'
+          + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>'
+          + '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
+    } else if (campTab === 'keys') {
+      const chans = l.channels || {};
+      body += campSec('Add keys',
+        '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace">'
+        + esc((l.keys || []).filter((k) => k.st === 'free').map((k) => k.k).join('\\n')) + '</textarea>'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
+        + '<div class="meta" id="ckeycount"></div>'
+        + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Save keys</button></div>')
+        + campSec('All keys — ' + (l.keys || []).length,
+          (l.keys || []).length
+            ? l.keys.map((k) => {
+              const who = k.cid && chans[k.cid] ? chans[k.cid].channel : null;
+              const st = k.st === 'free' ? 'free' : k.st === 'assigned' ? 'assigned' : k.st;
+              return '<div style="display:flex;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:12px">'
+                + '<span style="font-family:monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">' + esc(k.k) + '</span>'
+                + '<span class="meta" style="font-size:11px;width:80px">added ' + (k.added ? fmtAge(Math.floor((Date.now() - k.added) / 86400000)).replace(' ago', '') + ' ago' : '—') + '</span>'
+                + '<span style="font-size:11.5px;width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (who ? '→ ' + esc(who) : '—') + '</span>'
+                + '<span class="pill ' + (st === 'free' ? 'p-mid' : st === 'sent' ? 'p-bad' : 'p-good') + '" style="font-size:10px">' + st + '</span>'
+                + '<span class="meta" style="font-size:11px;width:80px">' + (k.at && who ? fmtAge(Math.floor((Date.now() - k.at) / 86400000)) : '') + '</span>'
+                + (st === 'free' ? '<button class="vb no" data-act="keydel" data-k="' + esc(k.k) + '" style="padding:1px 8px">×</button>' : '<span style="width:26px"></span>')
+                + '</div>';
+            }).join('')
+            : '<div class="meta" style="padding:14px;text-align:center">No keys yet.</div>');
+    } else {
+      body += '<div id="cpreviews"></div>';
+    }
   } else {
-    const ids = triageTab === 'acc' ? acc : rej;
+    body += '<div style="display:flex;gap:8px;margin-bottom:14px">'
+      + '<button class="ltab' + (creatorTab === 'acc' ? ' on' : '') + '" data-act="ctab" data-v="acc">Accepted (' + acc.length + ')</button>'
+      + '<button class="ltab' + (creatorTab === 'rej' ? ' on' : '') + '" data-act="ctab" data-v="rej">Rejected (' + rej.length + ')</button></div>';
+    const ids = creatorTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
     const moveBtns = (r) =>
       '<button class="vb" data-act="editchan" data-cid="' + r.channelId + '">Edit</button>'
       + '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">' + 'Back to queue' + '</button>'
-      + '<button class="vb ' + (triageTab === 'acc' ? 'no' : 'ok') + '" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (triageTab === 'acc' ? 'r' : 'a') + '">' + (triageTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>';
+      + '<button class="vb ' + (creatorTab === 'acc' ? 'no' : 'ok') + '" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (creatorTab === 'acc' ? 'r' : 'a') + '">' + (creatorTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>';
     body += rows.length
       ? (triageMode === 'detailed'
         ? rows.map((r) => detailCard(r, moveBtns(r))).join('')
@@ -1109,7 +1136,7 @@ document.addEventListener('click', (e) => {
   if (act === 'lpmenu') {
     lpOpen = !lpOpen; renderLists();
   } else if (act === 'lpick') {
-    lpOpen = false; activeList = b.dataset.v; triageTab = 'acc'; qi = 0; renderLists();
+    lpOpen = false; activeList = b.dataset.v; triageTab = 'creators'; qi = 0; renderLists();
   } else if (act === 'lnew') {
     lpOpen = false; pendingVerdict = null;
     $('lmodal').style.display = 'flex';
@@ -1118,7 +1145,7 @@ document.addEventListener('click', (e) => {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
-    activeList = name; triageTab = 'acc'; qi = 0; saveLists(); renderLists();
+    activeList = name; triageTab = 'creators'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
     if (!activeList) {
       pendingVerdict = { cid: b.dataset.cid, v: b.dataset.v || null };
@@ -1164,7 +1191,7 @@ document.addEventListener('click', (e) => {
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     const g = parseInt($('lmgoal').value.replace(/[^\\d]/g, ''), 10);
     if (g > 0) lists[name].goal = g;
-    activeList = name; triageTab = 'acc'; qi = 0;
+    activeList = name; triageTab = 'creators'; qi = 0;
     $('lmodal').style.display = 'none'; $('lmname').value = ''; $('lmgoal').value = '';
     saveLists();
     const pv = pendingVerdict; pendingVerdict = null;
@@ -1182,7 +1209,7 @@ document.addEventListener('click', (e) => {
     $('backlist').style.display = 'none';
     renderLists();
   } else if (act === 'openlist') {
-    activeList = b.dataset.n; triageTab = 'acc'; qi = 0; openMenu = null;
+    activeList = b.dataset.n; triageTab = 'creators'; qi = 0; openMenu = null;
     $('base').style.display = 'none'; $('backlist').style.display = 'none';
     renderLists();
   } else if (act === 'itemmenu') {
@@ -1231,28 +1258,41 @@ document.addEventListener('click', (e) => {
   } else if (act === 'copyc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
-  } else if (act === 'sendc' || act === 'gmailc') {
-    const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
-    const to = (r?.emails || [])[0];
-    if (!to) return;
-    const camp = readCampForm();
-    saveCampaign(); // merge the keys textarea so the pool is current
-    let assigned = assignedKeys(l, r.channelId);
-    if (!assigned.length && (l.keys || []).length) {
-      const need = Math.min((l.alloc && l.alloc[r.channelId]) || 1, freeKeys(l).length);
-      if (need < 1) { alert('No free keys left — add more or release some.'); renderPreviews(); return; }
-      assigned = freeKeys(l).slice(0, need);
-      assigned.forEach((k) => { k.st = 'sent'; k.cid = r.channelId; k.at = Date.now(); });
+  } else if (act === 'camptab') {
+    campTab = b.dataset.v; renderLists();
+  } else if (act === 'ctab') {
+    creatorTab = b.dataset.v; renderLists();
+  } else if (act === 'keyssave' || act === 'csave') {
+    saveCampaign(); renderLists();
+  } else if (act === 'keydel') {
+    const l = lists[activeList]; if (!l) return;
+    l.keys = (l.keys || []).filter((k) => !(k.k === b.dataset.k && k.st === 'free'));
+    saveLists(); renderLists();
+  } else if (act === 'draftc') {
+    const l = lists[activeList]; if (!l) return;
+    saveCampaign();
+    if (!assignKeys(l, b.dataset.cid)) alert('Not enough free keys — add more in the Keys tab.');
+    saveLists(); renderLists();
+  } else if (act === 'draftall') {
+    const l = lists[activeList]; if (!l) return;
+    saveCampaign();
+    let failed = 0;
+    for (const r of accChannels(l)) {
+      if (assignedKeys(l, r.channelId).length) continue;
+      if (!assignKeys(l, r.channelId)) failed++;
     }
-    const kt = keyTextFor(l, r.channelId) || '(no keys assigned)';
-    const subj = fillTemplate(camp.subject || '{game} — would love to see it on your channel', r, camp, kt);
-    const body = fillTemplate(camp.template, r, camp, kt);
-    if (act === 'gmailc') {
-      window.open('https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(to) + '&su=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body), '_blank');
-    } else {
-      window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
-    }
-    l.sent ||= {}; l.sent[r.channelId] = Date.now(); saveLists(); renderPreviews(); updKeyCount();
+    if (failed) alert(failed + ' creator(s) left undrafted — not enough free keys.');
+    saveLists(); renderLists();
+  } else if (act === 'marksent') {
+    const l = lists[activeList]; if (!l) return;
+    l.sent ||= {}; l.sent[b.dataset.cid] = Date.now();
+    (l.keys || []).forEach((k) => { if (k.cid === b.dataset.cid && k.st === 'assigned') k.st = 'sent'; });
+    saveLists(); renderLists();
+  } else if (act === 'markunsent') {
+    const l = lists[activeList]; if (!l) return;
+    delete (l.sent || {})[b.dataset.cid];
+    (l.keys || []).forEach((k) => { if (k.cid === b.dataset.cid) k.st = 'assigned'; });
+    saveLists(); renderLists();
   } else if (act === 'goal') {
     const l = lists[activeList]; if (!l) return;
     const v = prompt('Outreach goal — how many creators to contact? (empty to clear)', l.goal || '');
@@ -1269,7 +1309,7 @@ document.addEventListener('click', (e) => {
   } else if (act === 'keycycle') {
     const l = lists[activeList]; if (!l) return;
     const k = (l.keys || []).find((x) => x.k === b.dataset.k && x.cid === b.dataset.cid);
-    if (k) { k.st = KNEXT[k.st] || 'sent'; saveLists(); renderPreviews(); }
+    if (k && k.st !== 'free' && k.st !== 'assigned') { k.st = KNEXT[k.st] || 'sent'; saveLists(); renderPreviews(); }
   } else if (act === 'editchan') {
     const r = lists[activeList]?.channels?.[b.dataset.cid]; if (!r) return;
     editCid = b.dataset.cid;
@@ -1300,7 +1340,7 @@ document.addEventListener('click', (e) => {
     if (ch) { delete ch.coverage; ch.coverageChecked = Date.now(); saveLists(); renderLists(); renderNotifs(); }
   } else if (act === 'notifview') {
     const n = pendingNotifs[+b.dataset.i]; if (!n) return;
-    activeList = n.list; triageTab = 'acc'; qi = 0;
+    activeList = n.list; triageTab = 'creators'; qi = 0;
     $('base').style.display = 'none'; $('backlist').style.display = 'none';
     pendingNotifs.splice(+b.dataset.i, 1);
     renderLists(); renderNotifs();
@@ -1338,7 +1378,16 @@ function fillTemplate(tpl, c, camp, keyText) {
 const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => k.k).join('\\n');
 
 function readCampForm() {
-  return { game: $('cgame').value.trim(), dev: $('cdev').value.trim(), email: $('cemail').value.trim(), subject: $('csubject').value.trim(), template: $('ctemplate').value };
+  const c = (lists[activeList] && lists[activeList].campaign) || {};
+  const s = senderPrefs();
+  const gv = (id) => ($(id) ? $(id).value.trim() : null);
+  return {
+    game: gv('cgame') ?? c.game ?? lastGame ?? '',
+    dev: gv('cdev') ?? c.dev ?? s.dev ?? '',
+    email: gv('cemail') ?? c.email ?? s.email ?? '',
+    subject: gv('csubject') ?? c.subject ?? '',
+    template: $('ctemplate') ? $('ctemplate').value : (c.template || DEF_TPL),
+  };
 }
 const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm(), keyTextFor(l, r.channelId));
 function updKeyCount() {
@@ -1347,50 +1396,78 @@ function updKeyCount() {
   $('ckeycount').textContent = (l.keys || []).length ? free + ' free · ' + used + ' assigned (click a key chip in the drafts to cycle its status)' : 'No keys yet — paste them above and save.';
 }
 function saveCampaign() {
-  const l = lists[activeList]; if (!l || !$('ctemplate') || !$('ckeys')) return;
+  const l = lists[activeList]; if (!l) return;
   const c = readCampForm(); l.campaign = c;
-  // Merge the keys textarea: keep status/assignment of known keys, add new,
-  // drop removed ones only if still free.
-  const seen = new Set();
-  const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
-  l.keys ||= [];
-  const have = new Map(l.keys.map((k) => [k.k, k]));
-  l.keys = want.filter((k) => !seen.has(k) && seen.add(k)).map((k) => have.get(k) || { k, st: 'free' });
-  for (const k of have.values()) if (k.cid && !want.includes(k.k)) l.keys.push(k); // assigned keys never vanish
+  // Merge the keys textarea (Keys tab only): keep status/assignment of known
+  // keys, add new as free, drop removed ones only if still free.
+  if ($('ckeys')) {
+    const seen = new Set();
+    const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
+    l.keys ||= [];
+    const have = new Map(l.keys.map((k) => [k.k, k]));
+    l.keys = want.filter((k) => !seen.has(k) && seen.add(k)).map((k) => have.get(k) || { k, st: 'free', added: Date.now() });
+    for (const k of have.values()) if (k.cid && !want.includes(k.k)) l.keys.push(k); // assigned keys never vanish
+  }
   let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
   localStorage.setItem(SKEY, JSON.stringify({ ...s, dev: c.dev, email: c.email }));
   saveLists(); updKeyCount();
 }
+// Bind "want" free keys to a creator. Returns false if the pool can't cover it.
+function assignKeys(l, cid) {
+  const want = (l.alloc && l.alloc[cid]) || 1;
+  const have = assignedKeys(l, cid).length;
+  if (have >= want) return true;
+  const free = freeKeys(l);
+  if (free.length < want - have) return false;
+  free.slice(0, want - have).forEach((k) => { k.st = 'assigned'; k.cid = cid; k.at = Date.now(); });
+  return true;
+}
+
+function draftRow(l, r, camp, free) {
+  const to = (r.emails || [])[0];
+  const assigned = assignedKeys(l, r.channelId);
+  const sent = l.sent && l.sent[r.channelId];
+  let body;
+  if (!assigned.length) {
+    const want = Math.min((l.alloc && l.alloc[r.channelId]) || 1, Math.max(1, free));
+    body = '<div style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11px" class="meta">keys:'
+      + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="-1" style="padding:1px 8px">−</button>'
+      + ' <b>' + want + '</b>'
+      + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="1" style="padding:1px 8px">+</button>'
+      + ' <span style="margin-left:8px">(' + free + ' free)</span>'
+      + ' <button class="vb ok" data-act="draftc" data-cid="' + r.channelId + '" style="margin-left:auto">Draft</button></div>';
+  } else {
+    body = '<div style="margin-top:8px">' + assigned.map((k) =>
+      '<span class="kchip ' + (k.st === 'sent' || k.st === 'assigned' ? '' : k.st) + '"'
+      + (sent ? ' data-act="keycycle" data-cid="' + r.channelId + '" data-k="' + esc(k.k) + '" title="click: ' + k.st + ' → ' + KNEXT[k.st] + '"' : ' title="' + k.st + ' — locked when marked sent"')
+      + '>' + esc(k.k) + '</span>').join('') + '</div>'
+      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">'
+      + esc(fillTemplate(camp.template, r, camp, keyTextFor(l, r.channelId))) + '</pre>';
+  }
+  return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    + '<b style="font-size:13px">' + esc(r.channel) + '</b>'
+    + '<span class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file') + '</span>'
+    + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
+    + (assigned.length
+      ? '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
+      + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
+      + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
+      : '')
+    + '</div>' + body + '</div>';
+}
+
 function renderPreviews() {
   const l = lists[activeList]; if (!l || !$('cpreviews')) return;
-  const c = readCampForm();
+  const camp = readCampForm();
   const rows = accChannels(l);
   const free = freeKeys(l).length;
-  $('cpreviews').innerHTML = rows.length ? rows.map((r) => {
-    const to = (r.emails || [])[0];
-    const sent = l.sent && l.sent[r.channelId];
-    const assigned = assignedKeys(l, r.channelId);
-    const want = Math.min((l.alloc && l.alloc[r.channelId]) || 1, Math.max(1, free));
-    const keyLine = assigned.length
-      ? '<div style="margin-top:6px">' + assigned.map((k) =>
-          '<span class="kchip ' + (k.st === 'sent' ? '' : k.st) + '" data-act="keycycle" data-cid="' + r.channelId + '" data-k="' + esc(k.k) + '" title="click: ' + k.st + ' → ' + KNEXT[k.st] + '">' + esc(k.k) + '</span>').join('') + '</div>'
-      : '<div style="margin-top:6px;display:flex;align-items:center;gap:4px;font-size:11px" class="meta">keys:'
-        + ' <button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="-1" style="padding:1px 8px">−</button>'
-        + ' <b>' + want + '</b> '
-        + '<button class="vb" data-act="keyadj" data-cid="' + r.channelId + '" data-d="1" style="padding:1px 8px">+</button>'
-        + ' <span>(' + free + ' free)</span></div>';
-    return '<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-      + '<b style="font-size:13px">' + esc(r.channel) + '</b>'
-      + '<span class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file — copy & DM') + '</span>'
-      + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
-      + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy draft</button>'
-      + (to ? '<button class="vb ok" data-act="gmailc" data-cid="' + r.channelId + '">Gmail →</button>'
-        + '<button class="vb" data-act="sendc" data-cid="' + r.channelId + '" title="Opens your default mail app">Mail app →</button>' : '')
-      + '</div>' + keyLine
-      + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">'
-      + esc(fillTemplate(c.template, r, c, keyTextFor(l, r.channelId))) + '</pre></div>';
-  }).join('') : '<div class="meta" style="padding:16px;text-align:center">No accepted creators yet.</div>';
+  const undrafted = rows.filter((r) => !assignedKeys(l, r.channelId).length).length;
+  $('cpreviews').innerHTML =
+    (undrafted ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">'
+      + '<button class="btn" data-act="draftall" style="padding:7px 18px;font-size:12px">Draft all (' + undrafted + ')</button></div>' : '')
+    + (rows.length ? rows.map((r) => draftRow(l, r, camp, free)).join('')
+      : '<div class="meta" style="padding:16px;text-align:center">No accepted creators yet — accept some in the Creators tab.</div>');
 }
 
 // ---- Manual creator add ---------------------------------------------
