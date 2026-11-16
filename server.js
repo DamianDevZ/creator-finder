@@ -998,17 +998,7 @@ function renderLists() {
   const queue = Object.values(pool).filter((r) => !((l && l.verdicts) || {})[r.channelId]).slice(qi);
   const shown = triageMode === 'detailed' ? queue.slice(0, 3) : queue.slice(0, 10);
 
-  let body = l ? '' : '<div class="listbar" style="margin-bottom:14px">'
-    + '<div style="position:relative">'
-    + '<button class="lpbtn" data-act="lpmenu"><span style="color:var(--dim)">Select list…</span><span class="car">▾</span></button>'
-    + (lpOpen
-      ? '<div class="lpmenu">'
-      + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
-      + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
-      : '')
-    + '</div>'
-    + '<span style="margin-left:auto"></span>'
-    + '</div>';
+  let body = '';
 
   if (!l) {
     if (!queue.length) {
