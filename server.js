@@ -1048,7 +1048,7 @@ function renderLists() {
     }
   } else if (triageTab === 'camp') {
     if ($('ctemplate') || $('ckeys')) saveCampaign(); // preserve unsaved edits across re-renders
-    body += '<div style="display:flex;gap:8px;margin-bottom:14px">'
+    body += '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px">'
       + [['tmpl', 'Template'], ['keys', 'Keys'], ['drafts', 'Drafts']].map(([k, lbl]) =>
         '<button class="ltab' + (campTab === k ? ' on' : '') + '" data-act="camptab" data-v="' + k + '">' + lbl + '</button>').join('')
       + '</div>';
@@ -1098,14 +1098,16 @@ function renderLists() {
       body += '<div id="cpreviews"></div>';
     }
   } else {
-    body += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">'
+    body += '<div style="display:flex;align-items:center;margin-bottom:14px">'
+      + '<span style="flex:1"></span>'
+      + '<div style="display:flex;gap:8px">'
       + '<button class="ltab' + (creatorTab === 'acc' ? ' on' : '') + '" data-act="ctab" data-v="acc">Accepted (' + acc.length + ')</button>'
-      + '<button class="ltab' + (creatorTab === 'rej' ? ' on' : '') + '" data-act="ctab" data-v="rej">Rejected (' + rej.length + ')</button>'
-      + '<span style="margin-left:auto"></span>'
+      + '<button class="ltab' + (creatorTab === 'rej' ? ' on' : '') + '" data-act="ctab" data-v="rej">Rejected (' + rej.length + ')</button></div>'
+      + '<span style="flex:1;display:flex;justify-content:flex-end;gap:8px">'
       + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
       + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
       + '</button>'
-      + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button></div>';
+      + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button></span></div>';
     const ids = creatorTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
     const moveBtns = (r) => '<button class="vb" data-act="editchan" data-cid="' + r.channelId + '">Edit</button>';
