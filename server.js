@@ -1276,17 +1276,6 @@ document.addEventListener('click', (e) => {
     }
     if (failed) alert(failed + ' creator(s) left undrafted — not enough free keys.');
     saveLists(); renderLists();
-  } else if (act === 'regenn') {
-    const l = lists[activeList]; if (!l) return;
-    b.disabled = true; b.textContent = '↻ …';
-    const rows = accChannels(l);
-    fetch('/api/notes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channels: rows.map((r) => ({ channelId: r.channelId, channel: r.channel, subs: r.subs, games: r.games, description: r.description, vidTitles: r.vidTitles })) }),
-    }).then((r) => r.json()).then((j) => {
-      rows.forEach((r) => { const n = j.notes && j.notes[r.channelId]; if (n) { r.aiNote = n; notesCache[r.channelId] = n; } });
-      saveLists(); renderLists();
-    }).finally(() => { b.disabled = false; b.textContent = '↻ Notes'; });
   } else if (act === 'marksent') {
     const l = lists[activeList]; if (!l) return;
     l.sent ||= {}; l.sent[b.dataset.cid] = Date.now();
@@ -1341,7 +1330,7 @@ document.addEventListener('click', (e) => {
     if (l && editCid) { verdict(activeList, editCid, null); delete l.channels[editCid]; saveLists(); }
     $('emodal').style.display = 'none'; editCid = null; renderLists();
   } else if (act === 'dtoggle') {
-    const cid = el.dataset.cid;
+    const cid = b.dataset.cid;
     if (draftOpen.has(cid)) draftOpen.delete(cid); else draftOpen.add(cid);
     renderPreviews();
   } else if (act === 'dexpall' || act === 'dcolall') {
@@ -1375,7 +1364,7 @@ const campSec = (title, inner) =>
 const campField = (label, id, val) =>
   '<div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">' + label + '</div>'
   + '<input id="' + id + '" value="' + esc(val) + '" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none"></div>';
-const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}";
+const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, so I think {game} would be a really good fit for your channel.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions, and thanks for your time.\\n\\nKind regards,\\n{dev}";
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
 const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
 const chanStatus = (l, r) => {
@@ -1404,7 +1393,7 @@ function fillTemplate(tpl, c, camp, keyText) {
   };
   return String(tpl || '').replace(/\{(name|alias|note|game|dev|keys|keycount|keyoffer)\}/g, (m) => map[m] ?? m);
 }
-const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => k.k).join('\\n');
+const keyTextFor = (l, cid) => assignedKeys(l, cid).map((k) => 'Steam Key: ' + k.k).join('\\n');
 
 function readCampForm() {
   const c = (lists[activeList] && lists[activeList].campaign) || {};
@@ -1500,7 +1489,6 @@ function renderPreviews() {
   const undrafted = rows.filter((r) => !assignedKeys(l, r.channelId).length).length;
   $('cpreviews').innerHTML =
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
-    + '<button class="ltab" data-act="regenn" style="font-size:11px" title="Regenerate AI notes with the current phrasing">↻ Notes</button>'
     + '<span style="margin-left:auto"></span>'
     + '<button class="ltab" data-act="dexpall" style="font-size:11px">Expand all</button>'
     + '<button class="ltab" data-act="dcolall" style="font-size:11px">Collapse all</button>'
