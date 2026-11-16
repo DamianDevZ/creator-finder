@@ -347,6 +347,11 @@ const HTML = `<!DOCTYPE html>
   .tplansum{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:18px}
   .tpsname{font-weight:700;font-size:14px}
   .tpsprice{color:var(--dim);font-size:12px;margin-top:2px}
+  .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;color:#1f1f1f;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:13.5px;font-weight:600;cursor:pointer}
+  .gbtn:hover{background:#f1f3f4}
+  .gbtn svg{flex:none}
+  .orline{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:10.5px;margin:16px 0 12px;text-transform:uppercase;letter-spacing:1.2px}
+  .orline::before,.orline::after{content:'';flex:1;height:1px;background:var(--line)}
   .tlabel{display:block;font-size:12px;color:var(--dim);margin:0 0 6px}
   .tlabel+input{margin-bottom:14px;padding:11px 12px}
   .tfine{text-align:center;color:var(--dim);font-size:11.5px;margin-top:12px}
@@ -579,10 +584,12 @@ const HTML = `<!DOCTYPE html>
   </div>
 
   <div class="lmodal" id="authmodal" style="display:none">
-    <div class="lmbox" style="position:relative">
+    <div class="lmbox" style="position:relative;width:360px">
       <button class="mx" data-act="authcancel">✕</button>
       <b>Account</b>
-      <div class="meta" style="margin:4px 0 12px;font-size:12px">Sign in to sync your lists to the cloud.</div>
+      <div class="meta" style="margin:4px 0 14px;font-size:12px">Sign in to sync your lists to the cloud.</div>
+      <button class="gbtn" data-act="gauth"><svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>Continue with Google</button>
+      <div class="orline">or with email</div>
       <label style="font-size:11px;color:var(--dim)">Email</label>
       <input id="aemail" type="email" style="margin-top:4px">
       <label style="font-size:11px;color:var(--dim);display:block;margin-top:10px">Password</label>
@@ -1063,13 +1070,21 @@ async function cloudPull() {
   lists = remoteNewer ? { ...lists, ...remote } : { ...remote, ...lists };
   saveLists(); renderLists();
 }
+if (/access_token=/.test(location.hash)) {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const at = h.get('access_token');
+  if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
+  history.replaceState(null, '', location.pathname + location.search);
+}
 async function initSession() {
   renderAcct();
   if (!session) return;
+  if (!session.rt) { await refreshMe(); if (session.email) cloudPull(); else saveSession(null); return; }
   const j = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.rt }) }).then((r) => r.json()).catch(() => null);
   if (j && j.access_token) {
     session.at = j.access_token; session.rt = j.refresh_token || session.rt;
     localStorage.setItem(SESKEY, JSON.stringify(session));
+    if (!session.email || !session.plan) await refreshMe();
     cloudPull();
     if (new URLSearchParams(location.search).get('upgraded')) {
       await refreshMe();
@@ -1109,6 +1124,7 @@ function toast(msg) {
 let onb = { step: 'plans', plan: 'free' };
 function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(4,7,12,.84);backdrop-filter:blur(3px)'; }
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
+const GSVG = '<svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>';
 function renderTiers() {
   const box = $('tierbox');
   box.style.width = onb.step === 'plans' ? '' : '480px';
@@ -1137,6 +1153,8 @@ function renderTiers() {
       + '<div class="ttitle" style="margin-top:4px">Create your account</div>'
       + '<div class="tsub" style="margin-bottom:20px">Your lists sync automatically once you are in.</div>'
       + '<div class="tplansum"><div><div class="tpsname">' + (onb.plan === 'pro' ? 'Pro' : 'Free') + '</div><div class="tpsprice">' + (onb.plan === 'pro' ? PRO_PRICE + '/month · cancel anytime' : 'Free forever') + '</div></div><button class="tlink" data-act="tierback">Change plan</button></div>'
+      + '<button class="gbtn" data-act="gauth">' + GSVG + 'Continue with Google</button>'
+      + '<div class="orline">or with email</div>'
       + '<label class="tlabel">Email</label><input id="temail" type="email" placeholder="you@studio.com" autocomplete="email">'
       + '<label class="tlabel">Password</label><input id="tpass" type="password" placeholder="6+ characters" autocomplete="new-password">'
       + '<div id="tierr" style="color:var(--bad);font-size:12px;min-height:16px;margin-top:10px"></div>'
@@ -1560,6 +1578,8 @@ document.addEventListener('click', (e) => {
           setTimeout(() => { $('aerr').style.color = 'var(--bad)'; }, 3000);
         }
       }).catch(() => { b.disabled = false; $('aerr').textContent = 'Network error.'; });
+  } else if (act === 'gauth') {
+    location.href = '/api/auth/google';
   } else if (act === 'logout') {
     saveSession(null); renderLists();
   } else if (act === 'tiers') {
@@ -2187,6 +2207,13 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
     }
     if (url.pathname.startsWith('/api/auth/')) {
       if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
+      if (url.pathname === '/api/auth/google' && req.method === 'GET') {
+        const host = req.headers.host || 'localhost';
+        const proto = /^(localhost|127\.)/.test(host) ? 'http' : 'https';
+        const rt = encodeURIComponent(`${proto}://${host}/`);
+        res.writeHead(302, { Location: `${SB_URL}/auth/v1/authorize?provider=google&redirect_to=${rt}` });
+        return res.end();
+      }
       const b = await readBody(req);
       if (url.pathname === '/api/auth/signup' && req.method === 'POST') {
         // Admin-create so no confirmation email is needed — signup = logged in.
