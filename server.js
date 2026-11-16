@@ -1101,7 +1101,7 @@ function toast(msg) {
   setTimeout(() => d.remove(), 4200);
 }
 let onb = { step: 'plans', plan: 'free' };
-function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.display = 'flex'; }
+function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(0,0,0,.6)'; }
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
 function renderTiers() {
   const box = $('tierbox');
@@ -2289,7 +2289,7 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       if (missing.length) apply(missing, await aiNotesBatch(process.env.GEMINI_API_KEY, missing).catch(() => []));
       return json(200, { notes: map });
     }
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
     res.end(HTML);
   } catch (e) {
     json(500, { error: e.message });
