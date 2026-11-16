@@ -72,6 +72,64 @@ const setPlan = (uid, plan) =>
   }).catch(() => {});
 const FREE_SCANS_PER_DAY = 3;
 
+// ---- Creator/game knowledge graph --------------------------------------
+// Every scan logs which creators cover which games; known creators merge
+// back into future results and well-covered games skip their search query.
+const normGame = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const COVERED_MIN = 8;
+async function dbKnownCreators(simNames) {
+  if (!SB_URL || !SB_KEY || !simNames.length) return { counts: {}, creators: [] };
+  try {
+    const keys = simNames.map(normGame);
+    const r = await sbRest(`/cf_coverage?game=in.(${keys.map(encodeURIComponent).join(',')})&select=game,game_name,channel_id`);
+    const rows = await r.json().catch(() => []);
+    if (!Array.isArray(rows) || !rows.length) return { counts: {}, creators: [] };
+    const counts = {}; const byId = new Map();
+    for (const row of rows) {
+      counts[row.game] = (counts[row.game] || 0) + 1;
+      if (!byId.has(row.channel_id)) byId.set(row.channel_id, new Set());
+      byId.get(row.channel_id).add(row.game_name);
+    }
+    const cr = await sbRest(`/cf_creators?channel_id=in.(${[...byId.keys()].map(encodeURIComponent).join(',')})&select=channel_id,data`);
+    const crows = await cr.json().catch(() => []);
+    const creators = (Array.isArray(crows) ? crows : []).map((c) => ({
+      ...(c.data || {}), games: [...new Set([...((c.data || {}).games || []), ...byId.get(c.channel_id)])],
+    }));
+    return { counts, creators };
+  } catch { return { counts: {}, creators: [] }; }
+}
+async function dbLogScan(fp, simNames, results) {
+  if (!SB_URL || !SB_KEY || !results.length) return;
+  try {
+    const now = new Date().toISOString();
+    const games = [fp.name, ...simNames];
+    await sbRest('/cf_games', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(games.map((g) => {
+        const meta = (fp.similarGames || []).find((x) => normGame(x.name) === normGame(g));
+        const appid = normGame(g) === normGame(fp.name) ? fp.appid : meta && !String(meta.appid).startsWith('manual') ? meta.appid : '';
+        return { key: normGame(g), name: g, appid: String(appid || ''), tags: fp.tags || [], similar_games: (fp.similarGames || []).map((x) => x.name), updated_at: now };
+      })),
+    }).catch(() => {});
+    await sbRest('/cf_creators', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(results.map((r) => ({ channel_id: r.channelId, data: r, updated_at: now }))),
+    }).catch(() => {});
+    const edges = [];
+    for (const r of results)
+      for (const g of r.games && r.games.length ? r.games : games)
+        edges.push({ game: normGame(g), game_name: g, channel_id: r.channelId, seen_at: now });
+    if (edges.length)
+      await sbRest('/cf_coverage', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(edges),
+      }).catch(() => {});
+  } catch (e) { console.error('dbLogScan:', e.message); }
+}
+
 // Steam store search autocomplete (game names -> appids).
 async function searchGames(term) {
   return cache.wrap(`gsearch:${term.toLowerCase()}`, async () => {
@@ -2067,22 +2125,36 @@ export const handler = async (req, res) => {
             return json(429, { error: `Daily scan limit reached. Free gets ${FREE_SCANS_PER_DAY} game analyses per day — Pro is unlimited.` });
         }
       }
+      // Knowledge graph: well-covered similar games skip their search query;
+      // their known creators merge into the results instead of being re-fetched.
+      const simNames = list(b.similar);
+      const known = await dbKnownCreators(simNames);
+      const skipGames = simNames.filter((n) => (known.counts[normGame(n)] || 0) >= COVERED_MIN);
       const { fp, queries, channelCount, ranked } = await findCreators(b.input, yt, {
         manualTags: list(b.tags),
-        manualSimilar: list(b.similar),
+        manualSimilar: simNames,
         minSubs: b.minsubs || 0,
         maxSubs: b.maxsubs || Infinity,
         deep: !!b.deep,
         dlp: !!b.dlp,
+        skipGames,
       });
-      // Server-side filters BEFORE slicing, so top N is filled with matches.
-      let results = ranked.filter((r) =>
-        (!b.emailonly || r.emails.length) &&
+      const passesFilters = (r) =>
+        (!b.emailonly || (r.emails || []).length) &&
         (!b.hidedev || r.niche !== 'Dev/studio') &&
         (!b.lang || b.lang === 'any' || (r.language || 'English') === b.lang) &&
-        (b.lastpost === 'any' || !b.lastpost || (r.daysSince != null && r.daysSince <= +b.lastpost))
+        (b.lastpost === 'any' || !b.lastpost || (r.daysSince != null && r.daysSince <= +b.lastpost));
+      // Server-side filters BEFORE slicing, so top N is filled with matches.
+      let results = ranked.filter(passesFilters);
+      const seen = new Set(results.map((r) => r.channelId));
+      const dbCands = known.creators.filter((r) =>
+        !seen.has(r.channelId) && passesFilters(r) &&
+        (r.subs || 0) >= (b.minsubs || 0) && (r.subs || 0) <= (b.maxsubs || Infinity)
       );
-      results = results.slice(0, b.expand ? (b.top || 400) : 20);
+      results = [...results, ...dbCands]
+        .sort((x, y) => (y.score || 0) - (x.score || 0))
+        .slice(0, b.expand ? (b.top || 400) : 20);
+      await dbLogScan(fp, simNames, results);
       return json(200, {
         game: fp.name, queries: queries.length, channelCount, results,
         appids: { [fp.name]: fp.appid, ...Object.fromEntries(fp.similarGames.filter((g) => !String(g.appid).startsWith('manual')).map((g) => [g.name, g.appid])) },

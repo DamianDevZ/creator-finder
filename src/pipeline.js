@@ -27,13 +27,17 @@ export async function findCreators(input, yt, {
   topN = 20,
   pages = 2,
   dlp = false,
+  skipGames = [],
 } = {}) {
   const fp = await buildFingerprint(input, { manualTags });
   if (manualSimilar.length) fp.similarGames = manualSimilar.map((name, i) => ({ appid: `manual-${i}`, name }));
 
   const names = [fp.name, ...fp.similarGames.map((g) => g.name)];
+  const skip = new Set(skipGames.map(normalize));
   const queries = names
-    .flatMap((n, i) => (i === 0 ? [`"${n}" gameplay`, `"${n}" review`] : [`"${n}" gameplay`]))
+    .flatMap((n, i) => (i === 0 ? [`"${n}" gameplay`, `"${n}" review`] : [`"${n}" gameplay`]).map((q) => ({ q, n })))
+    .filter(({ n }) => !skip.has(normalize(n)))
+    .map(({ q }) => q)
     .slice(0, 22);
 
   const hits = new Map();

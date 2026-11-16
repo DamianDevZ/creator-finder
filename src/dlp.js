@@ -16,10 +16,15 @@ if (hasBin) {
 }
 
 export async function searchDlp(query, maxResults = 50) {
-  const args = hasBin
-    ? [BIN, [`ytsearch${maxResults}:${query}`, '--flat-playlist', '--dump-json', '--quiet', '--no-warnings']]
-    : ['python', ['-m', 'yt_dlp', `ytsearch${maxResults}:${query}`, '--flat-playlist', '--dump-json', '--quiet', '--no-warnings']];
-  const { stdout } = await run(args[0], args[1], { maxBuffer: 64 * 1024 * 1024 });
+  const searchArgs = [`ytsearch${maxResults}:${query}`, '--flat-playlist', '--dump-json', '--quiet', '--no-warnings'];
+  const opts = { maxBuffer: 64 * 1024 * 1024 };
+  let stdout;
+  try {
+    ({ stdout } = hasBin ? await run(BIN, searchArgs, opts) : await run('python', ['-m', 'yt_dlp', ...searchArgs], opts));
+  } catch (e) {
+    // Bundled binary won't spawn on other platforms (e.g. Windows dev) — use the python module.
+    ({ stdout } = await run('python', ['-m', 'yt_dlp', ...searchArgs], opts));
+  }
   return stdout
     .trim()
     .split('\n')
