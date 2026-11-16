@@ -98,6 +98,11 @@ const HTML = `<!DOCTYPE html>
   .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
   .navacct.ghost:hover{border-color:var(--dim)}
   .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1;display:flex;flex-direction:column}
+  .wrap.home{justify-content:center;align-items:center}
+  .wrap.home>*{width:min(700px,100%)}
+  .wrap.home .titlerow{justify-content:center}
+  .wrap.home .sub{text-align:center}
+  .wrap.home .flexsp{display:none}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
@@ -310,7 +315,7 @@ const HTML = `<!DOCTYPE html>
   </div>
 </aside>
 <div class="wrap">
-  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+  <div class="titlerow" style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
     <h1 id="viewtitle">Creator Finder</h1>
     <button class="ltab" id="backlist" data-act="backlist" style="display:none">← Back to list</button>
   </div>
@@ -424,7 +429,7 @@ const HTML = `<!DOCTYPE html>
   </div>
 
   <div id="notifs"></div>
-  <div style="flex:1"></div>
+  <div class="flexsp" style="flex:1"></div>
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
     <a href="/terms" style="color:var(--dim)">Terms of Service</a>
@@ -990,6 +995,7 @@ function renderLists() {
   renderNav();
   const l = activeList ? lists[activeList] : null;
   const game = lastGame || '';
+  document.querySelector('.wrap').classList.toggle('home', !activeList && !game);
   if (!game && !Object.keys(lists).length) { el.innerHTML = ''; return; }
   const pool = poolFor(game);
   const gameLists = Object.keys(lists);
@@ -1002,11 +1008,10 @@ function renderLists() {
 
   if (!l) {
     if (!queue.length) {
-      body += (lastGame && !expandDone)
-        ? skelCards()
-        : '<div class="meta" style="padding:24px;text-align:center">'
-        + (lastGame ? 'Pool exhausted — the whole frontier has been scanned. Run a new scan or widen filters.' : 'No candidates — run a scan first.')
-        + '</div>';
+      if (!lastGame) { el.innerHTML = ''; return; }
+      body += expandDone
+        ? '<div class="meta" style="padding:24px;text-align:center">Pool exhausted — the whole frontier has been scanned. Run a new scan or widen filters.</div>'
+        : skelCards();
       el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
       return;
     }
