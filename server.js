@@ -100,8 +100,8 @@ const HTML = `<!DOCTYPE html>
   .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1;display:flex;flex-direction:column}
   .wrap.home{justify-content:flex-start;align-items:center}
   .wrap.home>*{width:min(720px,100%)}
-  .wrap.home .titlerow{justify-content:center;margin-top:14vh}
-  .wrap.home #viewtitle{font-size:34px;letter-spacing:-.5px}
+  .wrap.home .titlerow{justify-content:center !important;margin-top:14vh}
+  .wrap.home #viewtitle{font-size:30px;letter-spacing:3px;font-weight:400}
   .wrap.home .sub{text-align:center;font-size:14.5px;margin-top:10px}
   .wrap.home .searchbar{padding:12px;border-radius:16px;margin-top:26px}
   .wrap.home .searchbar input{font-size:17px}
@@ -994,7 +994,7 @@ function skelCards() {
 
 function renderLists() {
   const el = $('lists');
-  $('viewtitle').textContent = activeList || 'Creator Finder';
+  $('viewtitle').innerHTML = activeList ? esc(activeList) : '<b>CREATOR</b>FINDER';
   renderNav();
   const l = activeList ? lists[activeList] : null;
   const game = lastGame || '';
