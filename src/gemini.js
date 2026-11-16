@@ -11,9 +11,12 @@ export async function aiNotesBatch(apiKey, channels) {
     videoTitles: (c.vidTitles || []).slice(0, 6),
   }));
   const prompt = `You are helping an indie game developer write outreach emails to YouTubers.
-For each channel below, write ONE short line (under 90 characters, roughly 8-12 words) phrased to follow the word "you" in a sentence like "I noticed that you ..." — i.e. a verb-phrase describing what the channel does. Examples: "make chill co-op let's plays with your friends", "do analytical reviews with dry humor", "cover cozy sims and colony builders". Focus on: what they cover, commentary style, tone, format. No view counts, no video titles, no subscriber numbers, never start with "you".
+For each channel below, write ONE short line (under 90 characters, roughly 8-12 words) in TWO phrasings of the same description:
+- "note": a verb-phrase meant to follow the word "you" in a sentence like "I noticed that you ..." — e.g. "make chill co-op let's plays with your friends", "do analytical reviews with dry humor", "cover cozy sims and colony builders". Never start with "you".
+- "card": the same thing in third person, e.g. "makes chill co-op let's plays with friends", "does analytical reviews with dry humor", "covers cozy sims and colony builders".
+Focus on: what they cover, commentary style, tone, format. No view counts, no video titles, no subscriber numbers.
 
-Return ONLY a JSON array of objects like {"i": 0, "note": "..."} — one per input, every index covered, no markdown.
+Return ONLY a JSON array of objects like {"i": 0, "note": "...", "card": "..."} — one per input, every index covered, no markdown.
 
 ${JSON.stringify(items)}`;
   const res = await fetch(

@@ -787,7 +787,8 @@ async function maybeExpand() {
       const r = expandBuffer.shift();
       if (!r) break;
       if (!pool[r.channelId]) {
-        if (notesCache[r.channelId]) { r.aiNote = notesCache[r.channelId]; r.aiPending = false; }
+        const nc = notesCache[r.channelId];
+        if (nc) { r.aiNote = nc.note || nc; r.aiNoteCard = nc.card || null; r.aiPending = false; }
         pool[r.channelId] = r; added++;
       }
     }
@@ -858,7 +859,7 @@ const snap = (r) => ({
   score: r.score, subs: r.subs, medianViews: r.medianViews, games: r.games || [], alias: r.alias,
   language: r.language || 'English', notes: r.notes || [], emails: r.emails || [],
   vidTitles: r.vidTitles || [], description: r.description || '',
-  aiNote: r.aiNote || null, daysSince: r.daysSince ?? null,
+  aiNote: r.aiNote || null, aiNoteCard: r.aiNoteCard || null, daysSince: r.daysSince ?? null,
 });
 const poolFor = (game) => pools[game] || {};
 const queueFor = (l) => Object.values(poolFor(lastGame)).filter((r) => !(lists[l].verdicts || {})[r.channelId]);
@@ -919,7 +920,7 @@ function detailCard(r, btns, status) {
     + '<div class="qstat"><div class="qs-l">Last post</div><div class="qs-v">' + fmtAge(r.daysSince) + '</div></div></div>'
     + '<div class="qc-low"><div class="qc-rows">'
     + '<div class="qc-lbl">Covers</div><div class="qc-val covers">' + (r.games || []).map((g) => '<a href="' + (gameAppids[g.toLowerCase()] ? 'https://store.steampowered.com/app/' + gameAppids[g.toLowerCase()] + '/' : 'https://store.steampowered.com/search/?term=' + encodeURIComponent(g)) + '" target="_blank" style="color:inherit"><b>' + esc(g) + '</b></a>').join(', ') + '</div>'
-    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(r.aiNote || (r.notes || []).join(' · ') || '—')) + '</div>'
+    + '<div class="qc-lbl">Notes</div><div class="qc-val">' + (r.aiPending ? '<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span>' : esc(((s) => s ? s[0].toUpperCase() + s.slice(1) : s)(r.aiNoteCard || r.aiNote || (r.notes || []).join(' · ') || '—'))) + '</div>'
     + (r.emails.length ? '<div class="qc-lbl">Contact</div><div class="qc-val">' + r.emails.map((e) => '<span class="mailchip copymail" data-e="' + esc(e) + '" title="' + esc(e) + '">' + esc(e) + '</span>').join(' ') + '</div>' : '')
     + (r.coverage ? '<div class="qc-lbl">' + (r.coverage.confirmed ? 'Covered' : 'Coverage?') + '</div><div class="qc-val">'
       + '<a href="' + esc(r.coverage.url) + '" target="_blank" style="color:inherit"><b>' + esc(r.coverage.title) + '</b></a>'
@@ -1322,7 +1323,7 @@ document.addEventListener('click', (e) => {
     if (r) {
       r.alias = $('ealias').value.trim();
       const note = $('enote').value.trim();
-      if (note) { r.aiNote = note; r.notes = [note]; }
+      if (note) { r.aiNote = note; r.aiNoteCard = null; r.notes = [note]; }
       r.games = $('egames').value.split(',').map((x) => x.trim()).filter(Boolean);
       r.emails = $('eemails').value.split(',').map((x) => x.trim()).filter(Boolean);
       saveLists();
@@ -1628,7 +1629,7 @@ async function requestNotes(list) {
       chunk.forEach((r) => {
         r.aiPending = false;
         const n = j.notes && j.notes[r.channelId];
-        if (n) { r.aiNote = n; notesCache[r.channelId] = n; }
+        if (n) { r.aiNote = n.note || n; r.aiNoteCard = n.card || null; notesCache[r.channelId] = n; }
       });
       savePools(); renderLists();
     } catch { chunk.forEach((r) => { r.aiPending = false; }); }
@@ -1782,8 +1783,9 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       const chans = (b.channels || []).slice(0, 25);
       const map = {};
       const norm = (n) => (typeof n === 'string' ? n : n?.note);
+      const card = (n) => (typeof n === 'object' && n != null ? n.card || null : null);
       const idx = (n) => (typeof n === 'object' && n != null && n.i != null ? n.i : null);
-      const apply = (list, arr) => (arr || []).forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && list[k]) map[list[k].channelId] = norm(n); });
+      const apply = (list, arr) => (arr || []).forEach((n, i) => { const k = idx(n) ?? i; if (norm(n) && list[k]) map[list[k].channelId] = { note: norm(n), card: card(n) }; });
       apply(chans, await aiNotesBatch(process.env.GEMINI_API_KEY, chans).catch((e) => { console.error('AI notes:', e.message); return []; }));
       const missing = chans.filter((c) => !map[c.channelId]);
       if (missing.length) apply(missing, await aiNotesBatch(process.env.GEMINI_API_KEY, missing).catch(() => []));
