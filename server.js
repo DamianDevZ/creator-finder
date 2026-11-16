@@ -74,7 +74,8 @@ const HTML = `<!DOCTYPE html>
   body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(1200px 600px at 70% -10%,#1a2340 0%,var(--bg) 55%);color:var(--txt);min-height:100vh}
   .shell{display:flex;min-height:100vh}
   #nav{width:230px;flex-shrink:0;border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg2)}
-  .navlogo{font-size:15px;letter-spacing:1px;margin-bottom:24px}
+  .navlogo{font-size:15px;letter-spacing:1px;margin-bottom:24px;color:var(--dim)}
+  .navlogo b{color:var(--acc)}
   .navsec{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;padding:0 6px}
   .navitem{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:2px;position:relative}
   .navitem:hover{background:var(--bg3)}
@@ -99,19 +100,20 @@ const HTML = `<!DOCTYPE html>
   .navacct.ghost:hover{border-color:var(--dim)}
   .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1;display:flex;flex-direction:column}
   .wrap.home{justify-content:flex-start;align-items:center}
-  .wrap.home>*{width:min(720px,100%)}
-  .wrap.home .titlerow{justify-content:center !important;margin-top:14vh}
-  .wrap.home #viewtitle{font-size:30px;letter-spacing:3px;font-weight:400}
-  .wrap.home .sub{text-align:center;font-size:14.5px;margin-top:10px}
-  .wrap.home .searchbar{padding:12px;border-radius:16px;margin-top:26px}
+  .wrap.home>*{width:min(920px,92%)}
+  .wrap.home .titlerow{justify-content:center !important;margin-top:12vh}
+  .wrap.home #viewtitle{font-size:clamp(28px,3.2vw,38px);letter-spacing:4px;font-weight:400}
+  .wrap.home .sub{text-align:center;font-size:15px;margin-top:12px;line-height:1.6}
+  .wrap.home .searchbar{padding:14px;border-radius:16px;margin-top:30px}
   .wrap.home .searchbar input{font-size:17px}
   .wrap.home .searchbar .btn{padding:12px 28px;font-size:15px}
-  .howto{display:none;gap:12px;margin-top:36px}
+  .howto{display:none;gap:16px;margin-top:40px}
   .wrap.home .howto{display:grid;grid-template-columns:repeat(3,1fr)}
-  .howcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-  .howcard .hnum{width:24px;height:24px;border-radius:8px;background:rgba(91,140,255,.14);color:var(--acc);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
-  .howcard b{display:block;font-size:13px;margin:12px 0 6px}
-  .howcard p{margin:0;font-size:12px;color:var(--dim);line-height:1.55}
+  .howcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px}
+  .howcard .hnum{width:30px;height:30px;border-radius:9px;background:rgba(91,140,255,.14);color:var(--acc);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .howcard b{display:block;font-size:14.5px;margin:14px 0 8px}
+  .howcard p{margin:0;font-size:13px;color:var(--dim);line-height:1.6}
+  @media (max-width:760px){.wrap.home .howto{grid-template-columns:1fr}}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
@@ -305,7 +307,7 @@ const HTML = `<!DOCTYPE html>
 <body>
 <div class="shell">
 <aside id="nav">
-  <div class="navlogo"><b>CREATOR</b>FINDER</div>
+  <div class="navlogo"><b>CREATOR</b><span>FINDER</span></div>
   <div class="navguest">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <div style="width:30px;height:30px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--dim)">G</div>
