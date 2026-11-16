@@ -37,7 +37,7 @@ ${JSON.stringify(items)}`;
 export async function campaignTemplate(apiKey, { game, dev }) {
   const prompt = `Write a short outreach email a game developer sends to YouTubers asking them to cover their game "${game}". Sender name: "${dev}".
 Use these merge variables literally where appropriate: {name} (channel name), {alias} (creator's first name, used after "Hi"), {note} (a verb-phrase of what the creator does, written to follow "you" — e.g. "cover cozy sims and colony builders" — so write "because you {note}" or "I noticed that you {note}"), {keyoffer} (expands to e.g. "a Steam key" or "3 Steam keys for {game}" — use it for the key offer sentence instead of hardcoding a count), {keys} (where the actual keys are listed), {game}, {dev}.
-Under 130 words, warm, direct and human, no marketing-speak, no emojis, no em-dashes. Output ONLY the email body.`;
+Include a line expressing that it would be great to see the game played in a video on their channel. Under 130 words, warm, direct and human, no marketing-speak, no emojis, no em-dashes. Output ONLY the email body.`;
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
     {

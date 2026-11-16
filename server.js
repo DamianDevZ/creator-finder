@@ -1065,16 +1065,15 @@ function renderLists() {
         + campSec('<span class="cs-ic">✉</span>Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="margin-left:auto;font-size:11px;text-transform:none">✦ Generate with AI</button>',
           '<textarea id="ctemplate" rows="16" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
           + esc(tplFor(c)) + '</textarea>'
-          + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} what they do · {keyoffer} count-aware key offer · {keys} key list · {game} · {dev}</div>'
+          + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} what they do · {keyoffer} count-aware key offer · {keys} key list (each line labeled Steam Key:) · {keycount} number · {game} · {dev}</div>'
           + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button class="ltab" data-act="creset" style="font-size:11px">Reset to default</button><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
     } else if (campTab === 'keys') {
       const chans = l.channels || {};
       body += campSec('<span class="cs-ic">⚿</span>Add keys',
-        '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace">'
-        + esc((l.keys || []).filter((k) => k.st === 'free').map((k) => k.k).join('\\n')) + '</textarea>'
+        '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line — they get added to the ledger below" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace"></textarea>'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
         + '<div class="meta" id="ckeycount"></div>'
-        + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Save keys</button></div>')
+        + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Add keys</button></div>')
         + campSec('<span class="cs-ic">☰</span>All keys — ' + (l.keys || []).length,
           (l.keys || []).length
             ? '<div class="keyrow khead"><span>Key</span><span>Added</span><span>Assigned to</span><span>Status</span><span>Since</span><span></span></div>'
@@ -1260,8 +1259,16 @@ document.addEventListener('click', (e) => {
     campTab = b.dataset.v; renderLists();
   } else if (act === 'ctab') {
     creatorTab = b.dataset.v; renderLists();
-  } else if (act === 'keyssave' || act === 'csave') {
-    saveCampaign(); renderLists();
+  } else if (act === 'keyssave') {
+    const l = lists[activeList]; if (!l || !$('ckeys')) return;
+    const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
+    const have = new Set((l.keys || []).map((k) => k.k));
+    const seen = new Set();
+    let added = 0;
+    l.keys ||= [];
+    for (const k of want) { if (!have.has(k) && !seen.has(k)) { seen.add(k); l.keys.push({ k, st: 'free', added: Date.now() }); added++; } }
+    $('ckeys').value = '';
+    saveLists(); renderLists();
   } else if (act === 'keydel') {
     const l = lists[activeList]; if (!l) return;
     l.keys = (l.keys || []).filter((k) => !(k.k === b.dataset.k && k.st === 'free'));
@@ -1369,8 +1376,9 @@ const campSec = (title, inner) =>
 const campField = (label, id, val) =>
   '<div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">' + label + '</div>'
   + '<input id="' + id + '" value="' + esc(val) + '" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none"></div>';
-const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, so I think {game} would be a really good fit for your channel.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions, and thanks for your time.\\n\\nKind regards,\\n{dev}";
+const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, so I think {game} would be a really good fit for your audience. It would be great to see it played in a video on your channel.\\n\\nI'd love to send you {keyoffer} if you're interested.\\n\\n{keys}\\n\\nHappy to answer any questions, and thanks for your time.\\n\\nKind regards,\\n{dev}";
 const OLD_TPLS = [
+  "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, so I think {game} would be a really good fit for your channel.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions, and thanks for your time.\\n\\nKind regards,\\n{dev}",
   "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. I noticed that you {note}, and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you {keyoffer}:\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}",
   "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}",
 ];
@@ -1421,21 +1429,11 @@ const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm
 function updKeyCount() {
   const l = lists[activeList]; if (!l || !$('ckeycount')) return;
   const free = freeKeys(l).length, used = (l.keys || []).length - free;
-  $('ckeycount').textContent = (l.keys || []).length ? free + ' free · ' + used + ' assigned (click a key chip in the drafts to cycle its status)' : 'No keys yet — paste them above and save.';
+  $('ckeycount').textContent = (l.keys || []).length ? free + ' free · ' + used + ' assigned (click a key chip in the drafts to cycle its status)' : 'No keys yet — paste them above and click Add keys.';
 }
 function saveCampaign() {
   const l = lists[activeList]; if (!l) return;
   const c = readCampForm(); l.campaign = c;
-  // Merge the keys textarea (Keys tab only): keep status/assignment of known
-  // keys, add new as free, drop removed ones only if still free.
-  if ($('ckeys')) {
-    const seen = new Set();
-    const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
-    l.keys ||= [];
-    const have = new Map(l.keys.map((k) => [k.k, k]));
-    l.keys = want.filter((k) => !seen.has(k) && seen.add(k)).map((k) => have.get(k) || { k, st: 'free', added: Date.now() });
-    for (const k of have.values()) if (k.cid && !want.includes(k.k)) l.keys.push(k); // assigned keys never vanish
-  }
   let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
   localStorage.setItem(SKEY, JSON.stringify({ ...s, dev: c.dev, email: c.email }));
   saveLists(); updKeyCount();
