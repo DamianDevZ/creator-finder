@@ -11,7 +11,7 @@ export async function aiNotesBatch(apiKey, channels) {
     videoTitles: (c.vidTitles || []).slice(0, 6),
   }));
   const prompt = `You are helping an indie game developer write outreach emails to YouTubers.
-For each channel below, write ONE short "notes" line (under 90 characters, roughly 10-12 words) describing their content style and personality — e.g. "Chill co-op let's plays with friends, loves chaotic party games" or "Analytical reviews, dry humor". Focus on: commentary style, solo vs group, tone (chill/hype/analytical/funny), format (let's play/review/stream clips). No view counts, no video titles, no subscriber numbers.
+For each channel below, write ONE short line (under 90 characters, roughly 8-12 words) phrased to follow the word "you" in a sentence like "I noticed that you ..." — i.e. a verb-phrase describing what the channel does. Examples: "make chill co-op let's plays with your friends", "do analytical reviews with dry humor", "cover cozy sims and colony builders". Focus on: what they cover, commentary style, tone, format. No view counts, no video titles, no subscriber numbers, never start with "you".
 
 Return ONLY a JSON array of objects like {"i": 0, "note": "..."} — one per input, every index covered, no markdown.
 
@@ -33,7 +33,7 @@ ${JSON.stringify(items)}`;
 // Outreach email template with merge variables the client fills per creator.
 export async function campaignTemplate(apiKey, { game, dev }) {
   const prompt = `Write a short outreach email a game developer sends to YouTubers asking them to cover their game "${game}". Sender name: "${dev}".
-Use these merge variables literally where appropriate: {name} (channel name), {alias} (creator's first name, used after "Hi"), {note} (a short descriptor of the channel's content style like "chill co-op let's plays with dry humor" — write the sentence so it slots in as a noun phrase, e.g. "Your style — {note} — is exactly the vibe our players watch"), {game}, {dev}, {keys} (where steam keys are listed).
+Use these merge variables literally where appropriate: {name} (channel name), {alias} (creator's first name, used after "Hi"), {note} (a verb-phrase of what the creator does, written to follow "you" — e.g. "cover cozy sims and colony builders" — so write "because you {note}" or "I noticed that you {note}"), {keyoffer} (expands to e.g. "a Steam key" or "3 Steam keys for {game}" — use it for the key offer sentence instead of hardcoding a count), {keys} (where the actual keys are listed), {game}, {dev}.
 Under 130 words, warm and human, no marketing-speak, no emojis. Output ONLY the email body.`;
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`,
