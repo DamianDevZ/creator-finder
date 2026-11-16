@@ -1013,8 +1013,12 @@ async function initSession() {
 initSession();
 
 // ---- Plans ---------------------------------------------------------------
-const PRO_PRICE = '$12';
-const PLAN_LIMITS = { guest: { lists: 3, creators: 25 }, free: { lists: 3, creators: 25 }, pro: { lists: Infinity, creators: Infinity } };
+const PRO_PRICE = '$5';
+const PLAN_LIMITS = { guest: { adds: 5 }, free: { adds: 5 }, pro: { adds: Infinity } };
+const ADDSKEY = 'cf_adds';
+const addsToday = () => { try { const j = JSON.parse(localStorage.getItem(ADDSKEY)); return j && j.d === new Date().toDateString() ? (j.n || 0) : 0; } catch { return 0; } };
+const addsLeft = () => Math.max(0, PLAN_LIMITS[plan()].adds - addsToday());
+const bumpAdds = () => localStorage.setItem(ADDSKEY, JSON.stringify({ d: new Date().toDateString(), n: addsToday() + 1 }));
 const plan = () => localStorage.getItem('cf_dev_plan') || (session && session.plan) || 'guest';
 const isPro = () => plan() === 'pro';
 async function refreshMe() {
@@ -1030,7 +1034,7 @@ function toast(msg) {
   setTimeout(() => d.remove(), 4200);
 }
 let onb = { step: 'plans', plan: 'free' };
-function openTiers() { onb = { step: 'plans', plan: 'free' }; renderTiers(); $('tiermodal').style.display = 'flex'; }
+function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.display = 'flex'; }
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
 function renderTiers() {
   const box = $('tierbox');
@@ -1038,18 +1042,19 @@ function renderTiers() {
     box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button>'
       + '<div class="ttitle">Choose your plan</div>'
       + '<div class="tsub">Start free, upgrade when your outreach grows. Your lists sync to your account either way.</div>'
+      + (onb.reason ? '<div style="text-align:center;color:#e0a458;font-size:12.5px;margin:-6px 0 14px">' + esc(onb.reason) + '</div>' : '')
       + '<div class="tiergrid">'
       + '<div class="tcard">'
       + '<div class="tname">FREE</div>'
       + '<div class="tprice">$0<span> forever</span></div>'
-      + '<div class="tfeats">' + feat('3 creator lists') + feat('25 creators per list') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
+      + '<div class="tfeats">' + feat('Unlimited lists') + feat('5 creator adds per day') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
       + (session ? '<div class="tcur">Current plan</div>' : '<button class="ltab tcta" data-act="tierpick" data-v="free">Continue with Free</button>')
       + '</div>'
       + '<div class="tcard pro">'
       + '<div class="tbadge">MOST POPULAR</div>'
       + '<div class="tname">PRO</div>'
       + '<div class="tprice">' + PRO_PRICE + '<span> /month, cancel anytime</span></div>'
-      + '<div class="tfeats"><div class="flabel">EVERYTHING IN FREE, PLUS</div>' + feat('Unlimited lists and creators') + feat('Coverage alerts when creators post') + feat('Priority AI personalization') + feat('Early access to new features') + '</div>'
+      + '<div class="tfeats"><div class="flabel">EVERYTHING IN FREE, PLUS</div>' + feat('Unlimited creator adds') + feat('Coverage alerts when creators post') + feat('Priority AI personalization') + feat('Early access to new features') + '</div>'
       + '<button class="btn tcta" data-act="tierpick" data-v="pro">Go Pro</button>'
       + '</div></div>'
       + '<div id="tierr" style="color:var(--bad);font-size:11.5px;text-align:center;margin-top:12px;min-height:14px"></div>';
@@ -1101,11 +1106,13 @@ function verdict(listName, cid, v, quiet) {
   const l = lists[listName];
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
-  if (v === 'a' && l.verdicts[cid] !== 'a'
-    && Object.values(l.verdicts).filter((x) => x === 'a').length >= PLAN_LIMITS[plan()].creators) {
-    openTiers(); return;
+  if (v === 'a' && l.verdicts[cid] !== 'a' && addsLeft() <= 0) {
+    openTiers('You used your 5 free creator adds for today. Resets at midnight, or go Pro for unlimited.');
+    return;
   }
+  const wasA = l.verdicts[cid] === 'a';
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
+  if (v === 'a' && !wasA) bumpAdds();
   // Leaving Accepted releases that creator's steam keys back to the pool.
   if (v !== 'a' && l.keys) l.keys.forEach((k) => { if (k.cid === cid) { k.st = 'free'; delete k.cid; delete k.at; } });
   const r = poolFor(lastGame)[cid] || lastResults.find((x) => x.channelId === cid);
@@ -1370,7 +1377,6 @@ document.addEventListener('click', (e) => {
   } else if (act === 'startlist') {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
-    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; triageTab = 'creators'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
@@ -1415,7 +1421,6 @@ document.addEventListener('click', (e) => {
   } else if (act === 'lmcreate') {
     const name = $('lmname').value.trim();
     if (!name) return;
-    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { $('lmodal').style.display = 'none'; openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     const g = parseInt($('lmgoal').value.replace(/[^\\d]/g, ''), 10);
     if (g > 0) lists[name].goal = g;
@@ -1519,12 +1524,19 @@ document.addEventListener('click', (e) => {
     $('amodal').style.display = 'none';
   } else if (act === 'apick') {
     const l = lists[activeList]; if (!l) return;
+    if (l.verdicts[b.dataset.cid] !== 'a' && addsLeft() <= 0) {
+      $('amodal').style.display = 'none';
+      openTiers('You used your 5 free creator adds for today. Resets at midnight, or go Pro for unlimited.');
+      return;
+    }
     b.style.pointerEvents = 'none'; b.style.opacity = '.5';
     fetch('/api/channel-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channelId: b.dataset.cid }) })
       .then((r) => r.json()).then((p) => {
         if (p.error) { b.style.pointerEvents = ''; b.style.opacity = ''; return; }
         l.channels ||= {}; l.verdicts ||= {};
+        const wasA = l.verdicts[p.channelId] === 'a';
         l.channels[p.channelId] = snap(p); l.verdicts[p.channelId] = 'a';
+        if (!wasA) bumpAdds();
         saveLists(); $('amodal').style.display = 'none'; renderLists();
         requestNotes([l.channels[p.channelId]]).then(() => { if (l.channels[p.channelId].aiNote) saveLists(); });
       }).catch(() => { b.style.pointerEvents = ''; b.style.opacity = ''; });
@@ -1876,7 +1888,6 @@ document.addEventListener('keydown', (e) => {
   if (e.target.id === 'navlistname') {
     const name = e.target.value.trim();
     if (!name) return;
-    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { e.target.value = ''; openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; e.target.value = ''; $('newlistbox').style.display = 'none';
     saveLists(); renderLists();
