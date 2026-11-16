@@ -30,6 +30,24 @@ const yt = new YouTube(process.env.YOUTUBE_API_KEY, cache);
 const notesJobs_unused = null;
 const DAY = 24 * 60 * 60 * 1000;
 
+// Supabase Auth proxy — service key stays server-side; clients get user tokens.
+const SB_URL = process.env.SUPABASE_URL, SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+const sbAuth = (path, body) =>
+  fetch(`${SB_URL}/auth/v1${path}`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+async function sbUserId(token) {
+  if (!SB_URL || !token) return null;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return j?.id || null;
+  } catch { return null; }
+}
+
 // Steam store search autocomplete (game names -> appids).
 async function searchGames(term) {
   return cache.wrap(`gsearch:${term.toLowerCase()}`, async () => {
@@ -321,7 +339,7 @@ const HTML = `<!DOCTYPE html>
   <div id="newlistbox" style="display:none;margin-top:8px">
     <input id="navlistname" placeholder="List name…" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;outline:none">
   </div>
-  <div class="navacct-wrap">
+  <div class="navacct-wrap" id="navacctwrap">
     <button class="navacct" data-act="acct">Create account</button>
     <button class="navacct ghost" data-act="acct">Log in</button>
   </div>
@@ -445,6 +463,24 @@ const HTML = `<!DOCTYPE html>
         <span style="margin-left:auto"></span>
         <button class="ltab" data-act="ecancel">Cancel</button>
         <button class="btn" data-act="esave" style="padding:8px 18px;font-size:13px">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lmodal" id="authmodal" style="display:none">
+    <div class="lmbox" style="position:relative">
+      <button class="mx" data-act="authcancel">✕</button>
+      <b>Account</b>
+      <div class="meta" style="margin:4px 0 12px;font-size:12px">Sign in to sync your lists to the cloud.</div>
+      <label style="font-size:11px;color:var(--dim)">Email</label>
+      <input id="aemail" type="email" style="margin-top:4px">
+      <label style="font-size:11px;color:var(--dim);display:block;margin-top:10px">Password</label>
+      <input id="apass" type="password" style="margin-top:4px">
+      <div id="aerr" style="color:var(--bad);font-size:11.5px;margin-top:8px;min-height:15px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="ltab" data-act="authcancel">Cancel</button>
+        <button class="btn" data-act="authdo" data-v="login" style="padding:8px 16px;font-size:13px">Log in</button>
+        <button class="btn" data-act="authdo" data-v="signup" style="padding:8px 16px;font-size:13px">Sign up</button>
       </div>
     </div>
   </div>
@@ -873,8 +909,51 @@ try { pools = JSON.parse(localStorage.getItem(PKEY)) || {}; } catch { pools = {}
 for (const [n, l] of Object.entries(lists)) {
   if (l.pool) { pools[l.game] = { ...(pools[l.game] || {}), ...l.pool }; delete l.pool; }
 }
-const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
+const saveLists = () => { localStorage.setItem(LKEY, JSON.stringify(lists)); cloudPush(); };
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
+
+// ---- Accounts & cloud sync -------------------------------------------
+const SESKEY = 'cf_session';
+let session = null; try { session = JSON.parse(localStorage.getItem(SESKEY)); } catch {}
+function renderAcct() {
+  const w = $('navacctwrap'); if (!w) return;
+  w.innerHTML = session
+    ? '<div class="meta" style="font-size:10.5px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(session.email || '') + '">' + esc(session.email || 'signed in') + '</div>'
+      + '<button class="navacct ghost" data-act="logout">Log out</button>'
+    : '<button class="navacct" data-act="acct">Create account</button>'
+      + '<button class="navacct ghost" data-act="acct">Log in</button>';
+}
+function saveSession(s) { session = s; if (s) localStorage.setItem(SESKEY, JSON.stringify(s)); else localStorage.removeItem(SESKEY); renderAcct(); }
+let pushT = null;
+function cloudPush(now) {
+  if (!session) return;
+  clearTimeout(pushT);
+  const go = () => {
+    localStorage.setItem('cf_lastpush', String(Date.now()));
+    fetch('/api/lists', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.at }, body: JSON.stringify({ lists }) }).catch(() => {});
+  };
+  if (now) go(); else pushT = setTimeout(go, 700);
+}
+async function cloudPull() {
+  if (!session) return;
+  const j = await fetch('/api/lists', { headers: { Authorization: 'Bearer ' + session.at } }).then((r) => r.json()).catch(() => null);
+  if (!j) return;
+  const remote = j.lists || {};
+  const remoteNewer = j.updated_at ? new Date(j.updated_at).getTime() > (+localStorage.getItem('cf_lastpush') || 0) : false;
+  lists = remoteNewer ? { ...lists, ...remote } : { ...remote, ...lists };
+  saveLists(); renderLists();
+}
+async function initSession() {
+  renderAcct();
+  if (!session) return;
+  const j = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.rt }) }).then((r) => r.json()).catch(() => null);
+  if (j && j.access_token) {
+    session.at = j.access_token; session.rt = j.refresh_token || session.rt;
+    localStorage.setItem(SESKEY, JSON.stringify(session));
+    cloudPull();
+  } else saveSession(null);
+}
+initSession();
 let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
 let creatorTab = 'acc', campTab = 'tmpl', keyAddOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
@@ -1247,7 +1326,32 @@ document.addEventListener('click', (e) => {
     box.style.display = box.style.display === 'none' ? 'block' : 'none';
     if (box.style.display === 'block') $('navlistname').focus();
   } else if (act === 'acct') {
-    alert('Accounts coming soon — your lists are safely stored in this browser for now.');
+    $('aerr').textContent = '';
+    $('authmodal').style.display = 'flex';
+    setTimeout(() => $('aemail').focus(), 50);
+  } else if (act === 'authcancel') {
+    $('authmodal').style.display = 'none';
+  } else if (act === 'authdo') {
+    const email = $('aemail').value.trim(), pw = $('apass').value;
+    if (!email || !pw) { $('aerr').textContent = 'Email and password required.'; return; }
+    b.disabled = true; $('aerr').textContent = '';
+    fetch('/api/auth/' + b.dataset.v, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw }) })
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(({ ok, j }) => {
+        b.disabled = false;
+        if (!ok) { $('aerr').textContent = j.error_description || j.msg || j.error || 'Failed.'; return; }
+        if (j.access_token) {
+          saveSession({ at: j.access_token, rt: j.refresh_token, email: (j.user && j.user.email) || email });
+          $('authmodal').style.display = 'none'; $('apass').value = '';
+          cloudPull();
+        } else {
+          $('aerr').style.color = 'var(--good)';
+          $('aerr').textContent = 'Account created — check your email to confirm, then log in.';
+          setTimeout(() => { $('aerr').style.color = 'var(--bad)'; }, 3000);
+        }
+      }).catch(() => { b.disabled = false; $('aerr').textContent = 'Network error.'; });
+  } else if (act === 'logout') {
+    saveSession(null); renderLists();
   } else if (act === 'addcreator') {
     $('amodal').style.display = 'flex'; $('aq').value = ''; $('ares').innerHTML = '';
     setTimeout(() => $('aq').focus(), 50);
@@ -1801,6 +1905,55 @@ h1{color:#fff;font-size:26px;margin:0 0 24px;padding-bottom:14px;border-bottom:1
 h2{color:#e6ebf5;font-size:18px;margin:32px 0 10px}p{margin:12px 0}ul{padding-left:22px}li{margin:6px 0}
 strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;padding:8px 16px;border:1px solid #2a3142;border-radius:8px;text-decoration:none}
 </style></head><body>${html}<a class="back" href="/">← Back to Creator Finder</a></body></html>`);
+    }
+    if (url.pathname.startsWith('/api/auth/')) {
+      if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
+      const b = await readBody(req);
+      if (url.pathname === '/api/auth/signup' && req.method === 'POST') {
+        // Admin-create so no confirmation email is needed — signup = logged in.
+        const r = await fetch(`${SB_URL}/auth/v1/admin/users`, {
+          method: 'POST',
+          headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: b.email, password: b.password, email_confirm: true }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const dup = j.error_code === 'email_exists' || j.code === 422 || /already been registered/i.test(j.msg || '');
+          return json(dup ? 409 : r.status, { error: dup ? 'An account with this email already exists.' : (j.msg || j.error || 'Signup failed') });
+        }
+        const lr = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
+        return json(lr.status, await lr.json().catch(() => ({})));
+      }
+      if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+        const r = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
+        return json(r.status, await r.json().catch(() => ({})));
+      }
+      if (url.pathname === '/api/auth/refresh' && req.method === 'POST') {
+        const r = await sbAuth('/token?grant_type=refresh_token', { refresh_token: b.refresh_token });
+        return json(r.status, await r.json().catch(() => ({})));
+      }
+      return json(404, { error: 'unknown auth route' });
+    }
+    if (url.pathname === '/api/lists') {
+      if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
+      const uid = await sbUserId((req.headers.authorization || '').replace(/^Bearer /i, ''));
+      if (!uid) return json(401, { error: 'Not signed in' });
+      const base = `${SB_URL}/rest/v1/cf_user_lists`;
+      const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
+      if (req.method === 'GET') {
+        const r = await fetch(`${base}?user_id=eq.${uid}&select=lists,updated_at`, { headers: H });
+        const rows = await r.json().catch(() => []);
+        return json(200, Array.isArray(rows) && rows[0] ? rows[0] : { lists: {}, updated_at: null });
+      }
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        const r = await fetch(base, {
+          method: 'POST',
+          headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ user_id: uid, lists: b.lists || {}, updated_at: new Date().toISOString() }),
+        });
+        return json(r.ok ? 200 : r.status, { ok: r.ok });
+      }
     }
     if (req.method === 'POST' && url.pathname === '/api/notes') {
       const b = await readBody(req);
