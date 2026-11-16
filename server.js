@@ -372,35 +372,6 @@ const HTML = `<!DOCTYPE html>
     </div>
   </div>
 
-  <div id="cmodal" class="lmodal" style="display:none">
-    <div class="lmbox" style="width:640px;max-width:94vw;max-height:90vh;overflow-y:auto">
-      <button class="mx" data-act="ccancel">✕</button>
-      <div style="font-weight:700;margin-bottom:2px">Email campaign</div>
-      <div class="meta" style="font-size:11.5px;margin-bottom:14px">One template → a personalized draft for every accepted creator.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Game</div><input id="cgame"></div>
-        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Your name</div><input id="cdev"></div>
-        <div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Your email</div><input id="cemail"></div>
-      </div>
-      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">Subject</div>
-      <input id="csubject" placeholder="{game} — would love to see it on your channel">
-      <div style="display:flex;align-items:center;margin:12px 0 4px">
-        <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Template</div>
-        <button class="ltab" id="cgenbtn" data-act="cgen" style="margin-left:auto;font-size:11px">✦ Generate with AI</button>
-      </div>
-      <textarea id="ctemplate" rows="10" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit"></textarea>
-      <div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>
-      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px">Steam keys</div>
-      <textarea id="ckeys" rows="4" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace"></textarea>
-      <div class="meta" id="ckeycount" style="font-size:10.5px;margin-top:4px"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="ltab" data-act="ccancel">Close</button>
-        <button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & preview drafts</button>
-      </div>
-      <div id="cpreviews" style="margin-top:16px"></div>
-    </div>
-  </div>
-
   <div id="emodal" class="lmodal" style="display:none">
     <div class="lmbox" style="width:420px">
       <button class="mx" data-act="ecancel">✕</button>
@@ -911,9 +882,11 @@ function updTabs() {
   if (!l) return;
   const cnt = { queue: queueFor(activeList).length, acc: 0, rej: 0 };
   for (const v of Object.values(l.verdicts || {})) cnt[v === 'a' ? 'acc' : 'rej']++;
-  for (const [k, label] of [['queue', 'Queue'], ['acc', 'Accepted'], ['rej', 'Rejected']]) {
+  for (const [k, label] of [['queue', 'Queue'], ['acc', 'Accepted'], ['rej', 'Rejected'], ['camp', '✉ Campaign']]) {
     const t = $('lists').querySelector('[data-act="tab"][data-v="' + k + '"]');
-    if (t) t.textContent = label + ' (' + cnt[k] + ')';
+    if (t) t.textContent = k === 'camp'
+      ? '✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '')
+      : label + ' (' + cnt[k] + ')';
   }
 }
 
@@ -1039,12 +1012,12 @@ function renderLists() {
     + (l
       ? '<button class="ltab' + (triageTab === 'acc' ? ' on' : '') + '" data-act="tab" data-v="acc">Accepted (' + acc.length + ')</button>'
       + '<button class="ltab' + (triageTab === 'rej' ? ' on' : '') + '" data-act="tab" data-v="rej">Rejected (' + rej.length + ')</button>'
+      + '<button class="ltab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp">✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '') + '</button>'
       + '<span style="margin-left:auto"></span>'
       + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
       + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
       + '</button>'
       + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button>'
-      + '<button class="ltab" data-act="campaign" style="font-size:11.5px;border-color:var(--acc);color:var(--acc)">✉ Campaign</button>'
       : '')
     + '<span style="margin-left:auto"></span>'
     + '</div>';
@@ -1086,6 +1059,29 @@ function renderLists() {
         '<button class="vb no" data-act="verdict" data-cid="' + r.channelId + '" data-v="r">✗</button>'
         + '<button class="vb ok" data-act="verdict" data-cid="' + r.channelId + '" data-v="a">✓</button>');
     }
+  } else if (triageTab === 'camp') {
+    if ($('ctemplate')) saveCampaign(); // preserve unsaved edits across re-renders
+    const c = l.campaign || {};
+    const s = senderPrefs();
+    const rows = accChannels(l);
+    body += campSec('1 · Your details',
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      + campField('Game', 'cgame', c.game || lastGame || '')
+      + campField('Your name', 'cdev', c.dev || s.dev || '')
+      + campField('Your email', 'cemail', c.email || s.email || '')
+      + '</div><div style="margin-top:10px">'
+      + campField('Subject', 'csubject', c.subject || '') + '</div>')
+      + campSec('2 · Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none">✦ Generate with AI</button>',
+        '<textarea id="ctemplate" rows="9" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
+        + esc(c.template || DEF_TPL) + '</textarea>'
+        + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} their style · {game} · {dev} · {keys} key list</div>')
+      + campSec('3 · Steam keys',
+        '<textarea id="ckeys" rows="4" placeholder="Paste keys, one per line" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace">'
+        + esc((l.keys || []).map((k) => k.k).join('\\n')) + '</textarea>'
+        + '<div class="meta" id="ckeycount" style="font-size:10.5px;margin-top:4px"></div>')
+      + campSec('4 · Drafts — ' + rows.length + ' accepted ' + (rows.length === 1 ? 'creator' : 'creators'),
+        '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & refresh drafts</button></div>'
+        + '<div id="cpreviews"></div>');
   } else {
     const ids = triageTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
@@ -1100,6 +1096,7 @@ function renderLists() {
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
   el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
+  if (triageTab === 'camp' && l) { updKeyCount(); renderPreviews(); }
 }
 
 document.addEventListener('click', (e) => {
@@ -1223,10 +1220,6 @@ document.addEventListener('click', (e) => {
         saveLists(); $('amodal').style.display = 'none'; renderLists();
         requestNotes([l.channels[p.channelId]]).then(() => { if (l.channels[p.channelId].aiNote) saveLists(); });
       }).catch(() => { b.style.pointerEvents = ''; b.style.opacity = ''; });
-  } else if (act === 'campaign') {
-    openCampaign();
-  } else if (act === 'ccancel') {
-    $('cmodal').style.display = 'none';
   } else if (act === 'cgen') {
     const btn = $('cgenbtn'); btn.disabled = true; btn.textContent = 'Generating…';
     const c = readCampForm();
@@ -1318,6 +1311,13 @@ document.addEventListener('click', (e) => {
 
 // ---- Email campaign -----------------------------------------------
 const SKEY = 'cf_sender';
+const senderPrefs = () => { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch { return {}; } };
+const campSec = (title, inner) =>
+  '<div style="border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px">'
+  + '<div style="font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--dim);margin-bottom:10px">' + title + '</div>' + inner + '</div>';
+const campField = (label, id, val) =>
+  '<div><div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">' + label + '</div>'
+  + '<input id="' + id + '" value="' + esc(val) + '" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px 12px;font-size:13px;outline:none"></div>';
 const DEF_TPL = "Hi {alias},\\n\\nI'm {dev}, the developer of {game}. Your channel stood out to me — {note} — and I think {game} would be a great fit for your audience.\\n\\nI'd love to send you 2 Steam keys (one for you, one for a friend or a giveaway):\\n\\n{keys}\\n\\nHappy to answer any questions — thanks for your time!\\n\\nKind regards,\\n{dev}";
 const accChannels = (l) => Object.entries(l.verdicts || {}).filter(([, v]) => v === 'a').map(([c]) => l.channels[c]).filter(Boolean);
 const assignedKeys = (l, cid) => (l.keys || []).filter((k) => k.cid === cid);
@@ -1341,27 +1341,13 @@ function readCampForm() {
   return { game: $('cgame').value.trim(), dev: $('cdev').value.trim(), email: $('cemail').value.trim(), subject: $('csubject').value.trim(), template: $('ctemplate').value };
 }
 const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm(), keyTextFor(l, r.channelId));
-function openCampaign() {
-  const l = lists[activeList]; if (!l) return;
-  let s = {}; try { s = JSON.parse(localStorage.getItem(SKEY)) || {}; } catch {}
-  const c = l.campaign || {};
-  $('cgame').value = c.game || lastGame || '';
-  $('cdev').value = c.dev || s.dev || '';
-  $('cemail').value = c.email || s.email || '';
-  $('csubject').value = c.subject || '';
-  $('ctemplate').value = c.template || DEF_TPL;
-  $('ckeys').value = (l.keys || []).map((k) => k.k).join('\\n');
-  $('cpreviews').innerHTML = '';
-  updKeyCount();
-  $('cmodal').style.display = 'flex';
-}
 function updKeyCount() {
-  const l = lists[activeList]; if (!l) return;
+  const l = lists[activeList]; if (!l || !$('ckeycount')) return;
   const free = freeKeys(l).length, used = (l.keys || []).length - free;
   $('ckeycount').textContent = (l.keys || []).length ? free + ' free · ' + used + ' assigned (click a key chip in the drafts to cycle its status)' : 'No keys yet — paste them above and save.';
 }
 function saveCampaign() {
-  const l = lists[activeList]; if (!l) return;
+  const l = lists[activeList]; if (!l || !$('ctemplate') || !$('ckeys')) return;
   const c = readCampForm(); l.campaign = c;
   // Merge the keys textarea: keep status/assignment of known keys, add new,
   // drop removed ones only if still free.
@@ -1376,7 +1362,7 @@ function saveCampaign() {
   saveLists(); updKeyCount();
 }
 function renderPreviews() {
-  const l = lists[activeList]; if (!l) return;
+  const l = lists[activeList]; if (!l || !$('cpreviews')) return;
   const c = readCampForm();
   const rows = accChannels(l);
   const free = freeKeys(l).length;
