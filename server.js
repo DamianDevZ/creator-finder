@@ -1,6 +1,7 @@
 // Local web UI: node server.js -> http://localhost:3456
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Cache } from './src/cache.js';
 import { SupaCache } from './src/sbcache.js';
 import { YouTube, channelProfileScrape } from './src/youtube.js';
@@ -38,15 +39,37 @@ const sbAuth = (path, body) =>
     headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-async function sbUserId(token) {
+async function sbUser(token) {
   if (!SB_URL || !token) return null;
   try {
     const r = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } });
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
-    return j?.id || null;
+    return j?.id ? j : null;
   } catch { return null; }
 }
+const sbRest = (path, opts = {}) =>
+  fetch(`${SB_URL}/rest/v1${path}`, {
+    ...opts,
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+async function ensureProfile(uid) {
+  const r = await sbRest(`/cf_profiles?user_id=eq.${uid}&select=plan`);
+  const rows = await r.json().catch(() => []);
+  if (Array.isArray(rows) && rows[0]) return rows[0];
+  await sbRest('/cf_profiles', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ user_id: uid, plan: 'free' }),
+  }).catch(() => {});
+  return { plan: 'free' };
+}
+const setPlan = (uid, plan) =>
+  sbRest('/cf_profiles', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ user_id: uid, plan, updated_at: new Date().toISOString() }),
+  }).catch(() => {});
 
 // Steam store search autocomplete (game names -> appids).
 async function searchGames(term) {
@@ -241,6 +264,29 @@ const HTML = `<!DOCTYPE html>
   .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
   .lmbox{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .mx{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px}
+  .lmbox.wide{width:640px;max-width:92vw}
+  .ttitle{font-size:20px;font-weight:700;text-align:center}
+  .tsub{color:var(--dim);font-size:12.5px;text-align:center;margin:6px 0 18px}
+  .tiergrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .tcard{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:20px 18px;display:flex;flex-direction:column;gap:12px}
+  .tcard.pro{border:1.5px solid var(--acc)}
+  .tbadge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--acc);color:#fff;font-size:10px;font-weight:700;letter-spacing:.8px;padding:3px 10px;border-radius:20px;white-space:nowrap}
+  .tname{font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--dim)}
+  .tcard.pro .tname{color:var(--acc)}
+  .tprice{font-size:30px;font-weight:800}
+  .tprice span{font-size:12px;color:var(--dim);font-weight:500}
+  .tfeats{display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--txt);flex:1}
+  .tfeats .fi{display:flex;gap:8px;align-items:baseline}
+  .tfeats .fi i{font-style:normal;color:var(--acc);font-weight:700;flex:none}
+  .tfeats .flabel{color:var(--dim);font-size:11px;letter-spacing:.4px;margin-bottom:1px}
+  .tcta{width:100%;justify-content:center;padding:9px;font-size:13px}
+  .tcur{text-align:center;color:var(--dim);font-size:12px;padding:9px;border:1px dashed var(--line);border-radius:9px}
+  .planchip{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:11.5px;color:var(--dim);margin-left:8px}
+  .prochip{display:inline-block;background:var(--acc);color:#fff;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.8px;margin-bottom:8px}
+  .tlink{color:var(--acc);cursor:pointer;font-size:12px;background:none;border:none;padding:0}
+  .tlink:hover{text-decoration:underline}
+  .tdone{text-align:center;padding:14px 0}
+  .tdone .big{font-size:40px;color:var(--good)}
   .mx:hover{color:var(--txt)}
   #notifs{position:fixed;top:14px;right:14px;z-index:400;display:flex;flex-direction:column;gap:8px;max-width:360px}
   .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
@@ -482,7 +528,12 @@ const HTML = `<!DOCTYPE html>
         <button class="btn" data-act="authdo" data-v="login" style="padding:8px 16px;font-size:13px">Log in</button>
         <button class="btn" data-act="authdo" data-v="signup" style="padding:8px 16px;font-size:13px">Sign up</button>
       </div>
+      <div style="text-align:center;margin-top:12px"><button class="tlink" data-act="tiers">New here? See plans and create an account</button></div>
     </div>
+  </div>
+
+  <div class="lmodal" id="tiermodal" style="display:none">
+    <div class="lmbox wide" id="tierbox" style="position:relative"></div>
   </div>
 
   <div id="notifs"></div>
@@ -919,8 +970,9 @@ function renderAcct() {
   const w = $('navacctwrap'); if (!w) return;
   w.innerHTML = session
     ? '<div class="meta" style="font-size:10.5px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(session.email || '') + '">' + esc(session.email || 'signed in') + '</div>'
+      + (isPro() ? '<div class="prochip">PRO</div>' : '<button class="navacct" data-act="tiers" style="margin-bottom:6px">Upgrade to Pro</button>')
       + '<button class="navacct ghost" data-act="logout">Log out</button>'
-    : '<button class="navacct" data-act="acct">Create account</button>'
+    : '<button class="navacct" data-act="tiers">Create account</button>'
       + '<button class="navacct ghost" data-act="acct">Log in</button>';
 }
 function saveSession(s) { session = s; if (s) localStorage.setItem(SESKEY, JSON.stringify(s)); else localStorage.removeItem(SESKEY); renderAcct(); }
@@ -951,9 +1003,83 @@ async function initSession() {
     session.at = j.access_token; session.rt = j.refresh_token || session.rt;
     localStorage.setItem(SESKEY, JSON.stringify(session));
     cloudPull();
+    if (new URLSearchParams(location.search).get('upgraded')) {
+      await refreshMe();
+      toast(isPro() ? 'Welcome to Pro, everything is unlocked.' : 'Plan will update shortly.');
+      history.replaceState(null, '', location.pathname);
+    }
   } else saveSession(null);
 }
 initSession();
+
+// ---- Plans ---------------------------------------------------------------
+const PRO_PRICE = '$12';
+const PLAN_LIMITS = { guest: { lists: 3, creators: 25 }, free: { lists: 3, creators: 25 }, pro: { lists: Infinity, creators: Infinity } };
+const plan = () => localStorage.getItem('cf_dev_plan') || (session && session.plan) || 'guest';
+const isPro = () => plan() === 'pro';
+async function refreshMe() {
+  if (!session) return;
+  const j = await fetch('/api/me', { headers: { Authorization: 'Bearer ' + session.at } }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  if (j) { session.plan = j.plan; session.email = j.email || session.email; localStorage.setItem(SESKEY, JSON.stringify(session)); renderAcct(); }
+}
+function toast(msg) {
+  const d = document.createElement('div');
+  d.className = 'panel';
+  d.style.cssText = 'position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:12px 24px;z-index:300;font-size:13px';
+  d.textContent = msg; document.body.appendChild(d);
+  setTimeout(() => d.remove(), 4200);
+}
+let onb = { step: 'plans', plan: 'free' };
+function openTiers() { onb = { step: 'plans', plan: 'free' }; renderTiers(); $('tiermodal').style.display = 'flex'; }
+const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
+function renderTiers() {
+  const box = $('tierbox');
+  if (onb.step === 'plans') {
+    box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button>'
+      + '<div class="ttitle">Choose your plan</div>'
+      + '<div class="tsub">Start free, upgrade when your outreach grows. Your lists sync to your account either way.</div>'
+      + '<div class="tiergrid">'
+      + '<div class="tcard">'
+      + '<div class="tname">FREE</div>'
+      + '<div class="tprice">$0<span> forever</span></div>'
+      + '<div class="tfeats">' + feat('3 creator lists') + feat('25 creators per list') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
+      + (session ? '<div class="tcur">Current plan</div>' : '<button class="ltab tcta" data-act="tierpick" data-v="free">Continue with Free</button>')
+      + '</div>'
+      + '<div class="tcard pro">'
+      + '<div class="tbadge">MOST POPULAR</div>'
+      + '<div class="tname">PRO</div>'
+      + '<div class="tprice">' + PRO_PRICE + '<span> /month, cancel anytime</span></div>'
+      + '<div class="tfeats"><div class="flabel">EVERYTHING IN FREE, PLUS</div>' + feat('Unlimited lists and creators') + feat('Coverage alerts when creators post') + feat('Priority AI personalization') + feat('Early access to new features') + '</div>'
+      + '<button class="btn tcta" data-act="tierpick" data-v="pro">Go Pro</button>'
+      + '</div></div>'
+      + '<div id="tierr" style="color:var(--bad);font-size:11.5px;text-align:center;margin-top:12px;min-height:14px"></div>';
+  } else if (onb.step === 'account') {
+    box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button>'
+      + '<div class="ttitle" style="font-size:18px;text-align:left">Create your account<span class="planchip">' + (onb.plan === 'pro' ? 'Pro · ' + PRO_PRICE + '/mo' : 'Free') + '</span></div>'
+      + '<div class="tsub" style="text-align:left;margin-bottom:14px">Your lists sync automatically once you are in.</div>'
+      + '<label style="font-size:11px;color:var(--dim)">Email</label><input id="temail" type="email" style="margin-top:4px">'
+      + '<label style="font-size:11px;color:var(--dim);display:block;margin-top:10px">Password</label><input id="tpass" type="password" style="margin-top:4px">'
+      + '<div id="tierr" style="color:var(--bad);font-size:11.5px;margin-top:8px;min-height:14px"></div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">'
+      + '<button class="tlink" data-act="tierback">Back to plans</button>'
+      + '<button class="btn" data-act="tiercreate" style="padding:9px 20px;font-size:13px">' + (onb.plan === 'pro' ? 'Create account and continue' : 'Create account') + '</button>'
+      + '</div>';
+    setTimeout(() => $('temail').focus(), 50);
+  } else {
+    box.innerHTML = '<button class="mx" data-act="tiercancel">✕</button><div class="tdone">'
+      + '<div class="big">✓</div><div class="ttitle">You are in</div>'
+      + '<div class="tsub" id="tdonemsg">Signed in as ' + esc(session && session.email || '') + '. Your lists now sync to this account.</div>'
+      + '<button class="btn tcta" data-act="tierdone" style="max-width:240px;margin:0 auto">Start finding creators</button></div>';
+  }
+}
+async function checkoutPro() {
+  const err = (m) => { const e = $('tierr'); if (e) e.textContent = m; };
+  const j = await fetch('/api/billing/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.at }, body: '{}' })
+    .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) })).catch(() => null);
+  if (j && j.j && j.j.url) { location.href = j.j.url; return true; }
+  err((j && j.j && j.j.error) || 'Could not start checkout.');
+  return false;
+}
 let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
 let creatorTab = 'acc', campTab = 'tmpl', keyAddOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
@@ -975,6 +1101,10 @@ function verdict(listName, cid, v, quiet) {
   const l = lists[listName];
   if (!l) return;
   l.verdicts ||= {}; l.channels ||= {};
+  if (v === 'a' && l.verdicts[cid] !== 'a'
+    && Object.values(l.verdicts).filter((x) => x === 'a').length >= PLAN_LIMITS[plan()].creators) {
+    openTiers(); return;
+  }
   if (v === null) delete l.verdicts[cid]; else l.verdicts[cid] = v;
   // Leaving Accepted releases that creator's steam keys back to the pool.
   if (v !== 'a' && l.keys) l.keys.forEach((k) => { if (k.cid === cid) { k.st = 'free'; delete k.cid; delete k.at; } });
@@ -1240,6 +1370,7 @@ document.addEventListener('click', (e) => {
   } else if (act === 'startlist') {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
     if (!name) return;
+    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; triageTab = 'creators'; qi = 0; saveLists(); renderLists();
   } else if (act === 'verdict') {
@@ -1284,6 +1415,7 @@ document.addEventListener('click', (e) => {
   } else if (act === 'lmcreate') {
     const name = $('lmname').value.trim();
     if (!name) return;
+    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { $('lmodal').style.display = 'none'; openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     const g = parseInt($('lmgoal').value.replace(/[^\\d]/g, ''), 10);
     if (g > 0) lists[name].goal = g;
@@ -1343,7 +1475,7 @@ document.addEventListener('click', (e) => {
         if (j.access_token) {
           saveSession({ at: j.access_token, rt: j.refresh_token, email: (j.user && j.user.email) || email });
           $('authmodal').style.display = 'none'; $('apass').value = '';
-          cloudPull();
+          refreshMe(); cloudPull();
         } else {
           $('aerr').style.color = 'var(--good)';
           $('aerr').textContent = 'Account created — check your email to confirm, then log in.';
@@ -1352,6 +1484,34 @@ document.addEventListener('click', (e) => {
       }).catch(() => { b.disabled = false; $('aerr').textContent = 'Network error.'; });
   } else if (act === 'logout') {
     saveSession(null); renderLists();
+  } else if (act === 'tiers') {
+    $('authmodal').style.display = 'none';
+    openTiers();
+  } else if (act === 'tiercancel' || act === 'tierdone') {
+    $('tiermodal').style.display = 'none';
+  } else if (act === 'tierback') {
+    onb.step = 'plans'; renderTiers();
+  } else if (act === 'tierpick') {
+    if (b.dataset.v === 'pro') {
+      if (session) checkoutPro();
+      else { onb.plan = 'pro'; onb.step = 'account'; renderTiers(); }
+    } else if (!session) { onb.plan = 'free'; onb.step = 'account'; renderTiers(); }
+  } else if (act === 'tiercreate') {
+    const email = $('temail').value.trim(), pw = $('tpass').value;
+    if (!email || !pw) { $('tierr').textContent = 'Email and password required.'; return; }
+    b.disabled = true; $('tierr').textContent = '';
+    fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw }) })
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(async ({ ok, j }) => {
+        b.disabled = false;
+        if (!ok || !j.access_token) { $('tierr').textContent = j.error || j.msg || 'Signup failed.'; return; }
+        saveSession({ at: j.access_token, rt: j.refresh_token, email: (j.user && j.user.email) || email, plan: 'free' });
+        await refreshMe(); cloudPull();
+        if (onb.plan === 'pro') {
+          const started = await checkoutPro();
+          if (!started) { onb.step = 'done'; renderTiers(); $('tdonemsg').textContent = 'Account created. Checkout is not available yet, so you are on Free for now.'; }
+        } else { onb.step = 'done'; renderTiers(); }
+      }).catch(() => { b.disabled = false; $('tierr').textContent = 'Network error.'; });
   } else if (act === 'addcreator') {
     $('amodal').style.display = 'flex'; $('aq').value = ''; $('ares').innerHTML = '';
     setTimeout(() => $('aq').focus(), 50);
@@ -1669,6 +1829,7 @@ function renderNotifs() {
     + '<button class="vb" data-act="notifx" data-i="' + i + '">✕</button></div>').join('');
 }
 async function checkCoverage() {
+  if (!isPro()) return;
   for (const [n, l] of Object.entries(lists)) {
     const game = ((l.campaign && l.campaign.game) || lastGame || '').trim();
     if (!game || !l.sent) continue;
@@ -1715,6 +1876,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.id === 'navlistname') {
     const name = e.target.value.trim();
     if (!name) return;
+    if (!lists[name] && Object.keys(lists).length >= PLAN_LIMITS[plan()].lists) { e.target.value = ''; openTiers(); return; }
     if (!lists[name]) lists[name] = { verdicts: {}, channels: {} };
     activeList = name; e.target.value = ''; $('newlistbox').style.display = 'none';
     saveLists(); renderLists();
@@ -1921,6 +2083,7 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
           const dup = j.error_code === 'email_exists' || j.code === 422 || /already been registered/i.test(j.msg || '');
           return json(dup ? 409 : r.status, { error: dup ? 'An account with this email already exists.' : (j.msg || j.error || 'Signup failed') });
         }
+        if (j.id) await ensureProfile(j.id);
         const lr = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
         return json(lr.status, await lr.json().catch(() => ({})));
       }
@@ -1934,10 +2097,56 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       }
       return json(404, { error: 'unknown auth route' });
     }
+    if (req.method === 'GET' && url.pathname === '/api/me') {
+      if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
+      const u = await sbUser((req.headers.authorization || '').replace(/^Bearer /i, ''));
+      if (!u) return json(401, { error: 'Not signed in' });
+      const p = await ensureProfile(u.id);
+      return json(200, { email: u.email, plan: p.plan || 'free' });
+    }
+    if (url.pathname === '/api/billing/checkout' && req.method === 'POST') {
+      const u = await sbUser((req.headers.authorization || '').replace(/^Bearer /i, ''));
+      if (!u) return json(401, { error: 'Not signed in' });
+      const SKEY = process.env.STRIPE_SECRET_KEY, PRICE = process.env.STRIPE_PRICE_ID;
+      if (!SKEY || !PRICE) return json(503, { error: 'Payments not configured yet' });
+      const appUrl = process.env.APP_URL || `http://${req.headers.host}`;
+      const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SKEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          mode: 'subscription',
+          'line_items[0][price]': PRICE,
+          'line_items[0][quantity]': '1',
+          success_url: `${appUrl}/?upgraded=1`,
+          cancel_url: `${appUrl}/`,
+          client_reference_id: u.id,
+          customer_email: u.email || '',
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      return json(r.ok ? 200 : r.status, { url: j.url, error: j.error && j.error.message });
+    }
+    if (url.pathname === '/api/billing/webhook' && req.method === 'POST') {
+      if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) return json(503, { error: 'Payments not configured' });
+      let raw = '';
+      for await (const c of req) raw += c;
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
+      {
+        const parts = Object.fromEntries((req.headers['stripe-signature'] || '').split(',').map((p) => p.split('=')));
+        const exp = createHmac('sha256', secret).update(`${parts.t}.${raw}`).digest('hex');
+        const ok = parts.t && parts.v1 && exp.length === parts.v1.length && timingSafeEqual(Buffer.from(exp), Buffer.from(parts.v1));
+        if (!ok) return json(400, { error: 'bad signature' });
+      }
+      const ev = JSON.parse(raw);
+      if (ev.type === 'checkout.session.completed' && ev.data && ev.data.object && ev.data.object.client_reference_id)
+        await setPlan(ev.data.object.client_reference_id, 'pro');
+      return json(200, { received: true });
+    }
     if (url.pathname === '/api/lists') {
       if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
-      const uid = await sbUserId((req.headers.authorization || '').replace(/^Bearer /i, ''));
-      if (!uid) return json(401, { error: 'Not signed in' });
+      const u = await sbUser((req.headers.authorization || '').replace(/^Bearer /i, ''));
+      if (!u) return json(401, { error: 'Not signed in' });
+      const uid = u.id;
       const base = `${SB_URL}/rest/v1/cf_user_lists`;
       const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' };
       if (req.method === 'GET') {
