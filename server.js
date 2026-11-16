@@ -109,8 +109,9 @@ const HTML = `<!DOCTYPE html>
   .wrap.home .searchbar .btn{padding:12px 28px;font-size:15px}
   .howto{display:none;gap:16px;margin-top:40px}
   .wrap.home .howto{display:grid;grid-template-columns:repeat(3,1fr)}
-  .howcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px}
-  .howcard .hnum{width:30px;height:30px;border-radius:9px;background:rgba(91,140,255,.14);color:var(--acc);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .howcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px;transition:border-color .15s}
+  .howcard:hover{border-color:rgba(91,140,255,.45)}
+  .howcard .hic{width:32px;height:32px;border-radius:9px;background:rgba(91,140,255,.14);color:var(--acc);font-size:15px;display:flex;align-items:center;justify-content:center}
   .howcard b{display:block;font-size:14.5px;margin:14px 0 8px}
   .howcard p{margin:0;font-size:13px;color:var(--dim);line-height:1.6}
   @media (max-width:760px){.wrap.home .howto{grid-template-columns:1fr}}
@@ -339,9 +340,12 @@ const HTML = `<!DOCTYPE html>
   </div>
 
   <div class="howto">
-    <div class="howcard"><div class="hnum">1</div><b>Profile your game</b><p>Paste a Steam link or title — we pull its tags, style, and the games players compare it to.</p></div>
-    <div class="howcard"><div class="hnum">2</div><b>Find the right creators</b><p>We scan YouTube for channels that actually cover games like yours and rank them by fit, activity, and reach.</p></div>
-    <div class="howcard"><div class="hnum">3</div><b>Reach out &amp; track</b><p>Accept creators into a list, draft personalized emails with Steam keys, and get notified if they cover you.</p></div>
+    <div class="howcard"><div class="hic">◈</div><b>Profile your game</b><p>Drop a Steam link and we pull its tags, developer, capsule art, and the games players actually compare it to.</p></div>
+    <div class="howcard"><div class="hic">◎</div><b>Find real fits</b><p>We scan YouTube for channels covering your game or its neighbors, then rank them by meaningful tag overlap, activity, and reach.</p></div>
+    <div class="howcard"><div class="hic">✦</div><b>Personalized outreach</b><p>AI notes capture what each channel does, so every email draft reads like you genuinely watch their content.</p></div>
+    <div class="howcard"><div class="hic">⚿</div><b>Track every key</b><p>Paste your Steam keys once, assign one or more per creator, and follow each from sent to claimed to redeemed.</p></div>
+    <div class="howcard"><div class="hic">⚑</div><b>Know when they cover you</b><p>We keep checking your contacted creators and flag anyone who may have made a video about your game.</p></div>
+    <div class="howcard"><div class="hic">☰</div><b>Lists with a goal</b><p>Set how many creators you want to reach. The queue keeps refilling with fresh candidates until you get there.</p></div>
   </div>
 
   <div id="base" style="display:none">
