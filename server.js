@@ -648,14 +648,8 @@ function renderRelated(elId, creator, games) {
   el.append(h, grid);
 }
 
-let sortKey = 'score', sortDir = -1, lastResults = [];
+let lastResults = [];
 const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n;
-const COLS = [
-  ['score','Score',r=>r.score],['channel','Channel',r=>r.channel.toLowerCase()],['alias','Alias',r=>(r.alias||'~')],
-  ['subs','Subs',r=>r.subs],
-  ['views','Avg views',r=>r.medianViews],
-  ['covers','Covers',r=>(r.games||[]).length],['lang','Language',r=>r.language||'English'],['notes','Notes',r=>(r.notes||[]).length],['email','Email',r=>r.emails.length],
-];
 const LANGS = ['English','French','Spanish','Portuguese','German','Russian/Ukrainian','Chinese','Japanese','Korean','any'];
 function buildLangMenu() {
   const cur = $('langfilter').value;
@@ -688,32 +682,6 @@ $('postmenu').addEventListener('click', (e) => {
 });
 
 
-function renderTable(results) {
-  lastResults = results;
-  const arrow = k => k === sortKey ? (sortDir === -1 ? ' ↓' : ' ↑') : '';
-  const head = '<tr>' + COLS.map(([k,l]) => '<th data-k="' + k + '" onclick="sortBy(this.dataset.k)">' + l + arrow(k) + '</th>').join('') + '</tr>';
-  const filtered = results;
-  const sorted = [...filtered].sort((a,b) => {
-    const f = COLS.find(c=>c[0]===sortKey)[2], x=f(a), y=f(b);
-    return (x<y?-1:x>y?1:0)*sortDir;
-  });
-  const rows = sorted.map(r => {
-    const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
-    const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--panel2)">';
-    return '<tr><td><span class="pill ' + cls + '" title="fit ' + r.breakdown.topicFit + ' · reach ' + r.breakdown.reach + ' · eng ' + r.breakdown.engagement + ' · rec ' + r.breakdown.recency + '">' + r.score + '</span></td>'
-      + '<td><div class="chan">' + thumb + '<div><div class="channame"><a href="' + r.url + '" target="_blank">' + r.channel + '</a></div></div></div></td>'
-      + '<td style="white-space:nowrap">' + (r.alias ? '<b>' + r.alias + '</b>' : '<span class="meta">—</span>') + '</td>'
-      + '<td class="num">' + fmt(r.subs) + '</td>'
-      + '<td class="num" title="Average views across their recent uploads">' + fmt(r.medianViews) + '</td>'
-      + '<td class="covers" style="max-width:170px">' + (r.games||[]).map(g=>'<b>'+g+'</b>').join('<br>') + '</td>'
-      + '<td><span class="meta" style="font-size:12px">' + (r.language || 'English') + '</span></td>'
-      + '<td class="meta notes-cell" data-cid="' + r.channelId + '" style="max-width:190px;font-size:11.5px;line-height:1.5;color:var(--dim)"><div>'
-      + (r.aiPending ? '<span><span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> <span style="font-size:10px">AI…</span></span>' : (r.notes||[]).join('<br>')) + '</div></td>'
-      + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td></tr>';
-  }).join('');
-  $('out').innerHTML = '<div class="panel"><div class="meta" style="margin-bottom:8px">' + filtered.length + ' of ' + results.length + ' shown' + (filtered.length < results.length ? ' — adjust filters to see more' : '') + '</div><table>' + head + rows + '</table></div>';
-}
-window.sortBy = (k) => { sortDir = sortKey === k ? -sortDir : (k === 'channel' ? 1 : -1); sortKey = k; renderTable(lastResults); };
 document.addEventListener('click', (e) => {
   const el = e.target.closest('.copymail');
   if (!el) return;
@@ -908,16 +876,13 @@ function fmtAge(d) {
 }
 
 function chanLine(r) {
-  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
   return thumb + '<div style="min-width:0;flex:1">'
-    + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><a href="' + r.url + '" target="_blank" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(r.channel) + '</a>'
-    + '<span class="pill ' + cls + '">' + r.score + '</span></div>'
+    + '<div style="display:flex;gap:8px;align-items:center;min-width:0"><a href="' + r.url + '" target="_blank" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(r.channel) + '</a></div>'
     + '<div class="meta" style="font-size:11px">' + fmt(r.subs) + ' subs · avg ' + fmt(r.medianViews) + ' views · ' + esc(r.language || 'English') + '</div></div>';
 }
 
 function detailCard(r, btns, status) {
-  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '">' : '<img style="background:var(--bg3)">';
   return '<div class="qcard2">'
     + '<a class="qc-left" href="' + r.url + '" target="_blank" style="text-decoration:none;color:inherit">' + thumb
@@ -925,7 +890,6 @@ function detailCard(r, btns, status) {
     + '<span class="qc-sub">Alias: ' + (r.alias ? esc(r.alias) : '—') + '</span></a>'
     + '<div class="qc-main">'
     + '<div class="qc-stats">'
-    + '<div class="qstat"><div class="qs-l">Fit score</div><div class="qs-v"><span class="pill ' + cls + '">' + r.score + '</span></div></div>'
     + '<div class="qstat"><div class="qs-l">Subscribers</div><div class="qs-v">' + fmt(r.subs) + '</div></div>'
     + '<div class="qstat"><div class="qs-l">Avg views</div><div class="qs-v">' + fmt(r.medianViews) + '</div></div>'
     + '<div class="qstat"><div class="qs-l">Language</div><div class="qs-v">' + esc(r.language || 'English') + '</div></div>'
@@ -948,10 +912,8 @@ function detailCard(r, btns, status) {
 }
 
 function qRow(r, btns, statusFn) {
-  const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
-  return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
-    + '<td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
+  return '<tr><td><div class="chan">' + thumb + '<div class="channame"><a href="' + r.url + '" target="_blank">' + esc(r.channel) + '</a></div></div></td>'
     + '<td class="num">' + fmt(r.subs) + '</td>'
     + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
     + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
@@ -961,7 +923,7 @@ function qRow(r, btns, statusFn) {
 
 function qTable(rows, lastW, btns, statusFn) {
   return '<table class="qt">'
-    + '<tr><th style="width:56px">Score</th><th>Channel</th><th style="width:70px">Subs</th><th style="width:78px">Language</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th>' + (statusFn ? '<th style="width:96px">Status</th>' : '') + '</tr>'
+    + '<tr><th>Channel</th><th style="width:70px">Subs</th><th style="width:78px">Language</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th>' + (statusFn ? '<th style="width:96px">Status</th>' : '') + '</tr>'
     + rows.map((r) => qRow(r, btns, statusFn)).join('') + '</table>';
 }
 
