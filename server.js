@@ -1238,7 +1238,7 @@ document.addEventListener('click', (e) => {
   } else if (act === 'copyc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
-  } else if (act === 'sendc') {
+  } else if (act === 'sendc' || act === 'gmailc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     const to = (r?.emails || [])[0];
     if (!to) return;
@@ -1253,7 +1253,12 @@ document.addEventListener('click', (e) => {
     }
     const kt = keyTextFor(l, r.channelId) || '(no keys assigned)';
     const subj = fillTemplate(camp.subject || '{game} — would love to see it on your channel', r, camp, kt);
-    window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(fillTemplate(camp.template, r, camp, kt));
+    const body = fillTemplate(camp.template, r, camp, kt);
+    if (act === 'gmailc') {
+      window.open('https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(to) + '&su=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body), '_blank');
+    } else {
+      window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+    }
     l.sent ||= {}; l.sent[r.channelId] = Date.now(); saveLists(); renderPreviews(); updKeyCount();
   } else if (act === 'goal') {
     const l = lists[activeList]; if (!l) return;
@@ -1394,7 +1399,8 @@ function renderPreviews() {
       + '<span class="meta" style="font-size:11px">' + (to ? esc(to) : 'no email on file — copy & DM') + '</span>'
       + (sent ? '<span class="pill p-good" style="margin-left:auto">Sent</span>' : '<span style="margin-left:auto"></span>')
       + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy draft</button>'
-      + (to ? '<button class="vb ok" data-act="sendc" data-cid="' + r.channelId + '">Send →</button>' : '')
+      + (to ? '<button class="vb ok" data-act="gmailc" data-cid="' + r.channelId + '">Gmail →</button>'
+        + '<button class="vb" data-act="sendc" data-cid="' + r.channelId + '" title="Opens your default mail app">Mail app →</button>' : '')
       + '</div>' + keyLine
       + '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:var(--dim);margin:10px 0 0;font-family:inherit">'
       + esc(fillTemplate(c.template, r, c, keyTextFor(l, r.channelId))) + '</pre></div>';
