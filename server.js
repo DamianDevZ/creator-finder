@@ -320,26 +320,26 @@ const HTML = `<!DOCTYPE html>
   .lpmi{padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer}
   .lpmi:hover{background:var(--bg3)}
   .lpmi.on{color:var(--acc);font-weight:600}
-  .lmodal{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
+  .lmodal{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(4,7,12,.84);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:200}
   .lmbox{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .mx{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px}
-  .lmbox.wide{width:640px;max-width:92vw}
-  .ttitle{font-size:20px;font-weight:700;text-align:center}
-  .tsub{color:var(--dim);font-size:12.5px;text-align:center;margin:6px 0 18px}
-  .tiergrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .tcard{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:20px 18px;display:flex;flex-direction:column;gap:12px}
+  .lmbox.wide{width:820px;max-width:94vw}
+  .ttitle{font-size:24px;font-weight:700;text-align:center}
+  .tsub{color:var(--dim);font-size:13.5px;text-align:center;margin:8px 0 24px}
+  .tiergrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .tcard{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:26px 24px;display:flex;flex-direction:column;gap:16px}
   .tcard.pro{border:1.5px solid var(--acc)}
-  .tbadge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--acc);color:#fff;font-size:10px;font-weight:700;letter-spacing:.8px;padding:3px 10px;border-radius:20px;white-space:nowrap}
-  .tname{font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--dim)}
+  .tbadge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--acc);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.9px;padding:4px 12px;border-radius:20px;white-space:nowrap}
+  .tname{font-size:12px;font-weight:700;letter-spacing:1.6px;color:var(--dim)}
   .tcard.pro .tname{color:var(--acc)}
-  .tprice{font-size:30px;font-weight:800}
-  .tprice span{font-size:12px;color:var(--dim);font-weight:500}
-  .tfeats{display:flex;flex-direction:column;gap:7px;font-size:12.5px;color:var(--txt);flex:1}
-  .tfeats .fi{display:flex;gap:8px;align-items:baseline}
+  .tprice{font-size:38px;font-weight:800}
+  .tprice span{font-size:13px;color:var(--dim);font-weight:500}
+  .tfeats{display:flex;flex-direction:column;gap:9px;font-size:13.5px;color:var(--txt);flex:1}
+  .tfeats .fi{display:flex;gap:9px;align-items:baseline}
   .tfeats .fi i{font-style:normal;color:var(--acc);font-weight:700;flex:none}
-  .tfeats .flabel{color:var(--dim);font-size:11px;letter-spacing:.4px;margin-bottom:1px}
-  .tcta{width:100%;justify-content:center;padding:9px;font-size:13px}
-  .tcur{text-align:center;color:var(--dim);font-size:12px;padding:9px;border:1px dashed var(--line);border-radius:9px}
+  .tfeats .flabel{color:var(--dim);font-size:11.5px;letter-spacing:.5px;margin-bottom:2px}
+  .tcta{width:100%;justify-content:center;padding:12px;font-size:14px}
+  .tcur{text-align:center;color:var(--dim);font-size:12.5px;padding:12px;border:1px dashed var(--line);border-radius:9px}
   .planchip{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:11.5px;color:var(--dim);margin-left:8px}
   .prochip{display:inline-block;background:var(--acc);color:#fff;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.8px;margin-bottom:8px}
   .tlink{color:var(--acc);cursor:pointer;font-size:12px;background:none;border:none;padding:0}
@@ -1101,7 +1101,7 @@ function toast(msg) {
   setTimeout(() => d.remove(), 4200);
 }
 let onb = { step: 'plans', plan: 'free' };
-function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(0,0,0,.6)'; }
+function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(4,7,12,.84);backdrop-filter:blur(3px)'; }
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
 function renderTiers() {
   const box = $('tierbox');
