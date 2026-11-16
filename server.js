@@ -70,6 +70,7 @@ const setPlan = (uid, plan) =>
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({ user_id: uid, plan, updated_at: new Date().toISOString() }),
   }).catch(() => {});
+const FREE_SCANS_PER_DAY = 3;
 
 // Steam store search autocomplete (game names -> appids).
 async function searchGames(term) {
@@ -852,12 +853,15 @@ $('go').onclick = async () => {
   lastInput = $('link').value;
   expandDone = false; expandBuffer = [];
   let first = true;
+  const scanId = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  curScanId = scanId;
   for (let i = 0; i < simNames.length; i += 3) {
     const res = await fetch('/api/find', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...baseBody, similar: simNames.slice(i, i + 3).join(',') }),
+      method: 'POST', headers: scanHeaders(),
+      body: JSON.stringify({ ...baseBody, scan: scanId, initial: i === 0, similar: simNames.slice(i, i + 3).join(',') }),
     });
     const j = await res.json().catch(() => ({}));
+    if (res.status === 429) { $('go').disabled = false; openTiers(j.error || 'Daily scan limit reached.'); return; }
     if (!res.ok || !j.results) {
       if (first) { $('lists').innerHTML = '<div class="panel"><div class="scanload" style="color:var(--rej)">Error: ' + esc(j.error || 'scan failed') + '</div></div>'; $('go').disabled = false; return; }
       continue;
@@ -932,9 +936,9 @@ async function fetchRound() {
   batch.forEach((g) => { usedGameNames.add(g.name.toLowerCase()); gameAppids[g.name.toLowerCase()] = g.appid; });
   if (!batch.length) return false;
   const res = await fetch('/api/find', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: scanHeaders(),
     body: JSON.stringify({
-      input: lastInput, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
+      input: lastInput, scan: curScanId, similar: batch.map((g) => g.name).join(','), tags: derivedTags().join(','), expand: true,
       minsubs: +$('minsubs').value.replace(/[^\\d]/g, '') || 0,
       maxsubs: +$('maxsubs').value.replace(/[^\\d]/g, '') || null,
       top: 400, deep: true, hidedev: true, emailonly: true,
@@ -1026,6 +1030,11 @@ async function refreshMe() {
   const j = await fetch('/api/me', { headers: { Authorization: 'Bearer ' + session.at } }).then((r) => r.ok ? r.json() : null).catch(() => null);
   if (j) { session.plan = j.plan; session.email = j.email || session.email; localStorage.setItem(SESKEY, JSON.stringify(session)); renderAcct(); }
 }
+const scanHeaders = () => ({
+  'Content-Type': 'application/json',
+  ...(session ? { Authorization: 'Bearer ' + session.at } : {}),
+  ...(localStorage.getItem('cf_dev_key') ? { 'x-dev-key': localStorage.getItem('cf_dev_key') } : {}),
+});
 function toast(msg) {
   const d = document.createElement('div');
   d.className = 'panel';
@@ -1047,14 +1056,14 @@ function renderTiers() {
       + '<div class="tcard">'
       + '<div class="tname">FREE</div>'
       + '<div class="tprice">$0<span> forever</span></div>'
-      + '<div class="tfeats">' + feat('Unlimited lists') + feat('5 creator adds per day') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
+      + '<div class="tfeats">' + feat('3 game analyses per day') + feat('Unlimited lists') + feat('5 creator adds per day') + feat('Cloud sync across devices') + feat('Email drafts and key tracking') + '</div>'
       + (session ? '<div class="tcur">Current plan</div>' : '<button class="ltab tcta" data-act="tierpick" data-v="free">Continue with Free</button>')
       + '</div>'
       + '<div class="tcard pro">'
       + '<div class="tbadge">MOST POPULAR</div>'
       + '<div class="tname">PRO</div>'
       + '<div class="tprice">' + PRO_PRICE + '<span> /month, cancel anytime</span></div>'
-      + '<div class="tfeats"><div class="flabel">EVERYTHING IN FREE, PLUS</div>' + feat('Unlimited creator adds') + feat('Coverage alerts when creators post') + feat('Priority AI personalization') + feat('Early access to new features') + '</div>'
+      + '<div class="tfeats"><div class="flabel">EVERYTHING IN FREE, PLUS</div>' + feat('Unlimited game analyses') + feat('Unlimited creator adds') + feat('Coverage alerts when creators post') + feat('Priority AI personalization') + feat('Early access to new features') + '</div>'
       + '<button class="btn tcta" data-act="tierpick" data-v="pro">Go Pro</button>'
       + '</div></div>'
       + '<div id="tierr" style="color:var(--bad);font-size:11.5px;text-align:center;margin-top:12px;min-height:14px"></div>';
@@ -1085,7 +1094,7 @@ async function checkoutPro() {
   err((j && j.j && j.j.error) || 'Could not start checkout.');
   return false;
 }
-let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
+let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false, curScanId = null;
 let creatorTab = 'acc', campTab = 'tmpl', keyAddOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
 const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
@@ -2039,6 +2048,25 @@ export const handler = async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/find') {
       const b = await readBody(req);
+      // Scan credits: only the first batch of an analysis counts; continuation
+      // batches of the same scan pass through. Guests are limited per IP,
+      // signed-in users per account; Pro and dev keys bypass.
+      const bypass = process.env.DEV_SCAN_KEY && req.headers['x-dev-key'] === process.env.DEV_SCAN_KEY;
+      if (b.initial && !bypass) {
+        const bearer = (req.headers.authorization || '').replace(/^Bearer /i, '');
+        const u = bearer ? await sbUser(bearer) : null;
+        const p = u ? await ensureProfile(u.id) : { plan: 'guest' };
+        if (p.plan !== 'pro') {
+          const subject = u ? `u:${u.id}` : `ip:${String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim()}`;
+          const r = await sbRest('/rpc/bump_scans', {
+            method: 'POST',
+            body: JSON.stringify({ p_subject: subject, p_day: new Date().toISOString().slice(0, 10) }),
+          });
+          const used = await r.json().catch(() => null);
+          if (typeof used === 'number' && used > FREE_SCANS_PER_DAY)
+            return json(429, { error: `Daily scan limit reached. Free gets ${FREE_SCANS_PER_DAY} game analyses per day — Pro is unlimited.` });
+        }
+      }
       const { fp, queries, channelCount, ranked } = await findCreators(b.input, yt, {
         manualTags: list(b.tags),
         manualSimilar: list(b.similar),
