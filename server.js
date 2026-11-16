@@ -1567,7 +1567,11 @@ document.addEventListener('click', (e) => {
       .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
       .then(({ ok, j }) => {
         b.disabled = false;
-        if (!ok) { $('aerr').textContent = j.error_description || j.msg || j.error || 'Failed.'; return; }
+        if (!ok) {
+          const m = j.error_description || j.msg || j.error || 'Failed.';
+          $('aerr').textContent = /invalid login credentials/i.test(m) ? 'Invalid email or password. Signed up with Google? Use the Google button above.' : m;
+          return;
+        }
         if (j.access_token) {
           saveSession({ at: j.access_token, rt: j.refresh_token, email: (j.user && j.user.email) || email });
           $('authmodal').style.display = 'none'; $('apass').value = '';
@@ -2225,7 +2229,7 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
           const dup = j.error_code === 'email_exists' || j.code === 422 || /already been registered/i.test(j.msg || '');
-          return json(dup ? 409 : r.status, { error: dup ? 'An account with this email already exists.' : (j.msg || j.error || 'Signup failed') });
+          return json(dup ? 409 : r.status, { error: dup ? 'An account with this email already exists. Log in, or use Continue with Google if you signed up that way.' : (j.msg || j.error || 'Signup failed') });
         }
         if (j.id) await ensureProfile(j.id);
         const lr = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
