@@ -65,6 +65,7 @@ const HTML = `<!DOCTYPE html>
 <style>
   :root{--bg:#0b0e14;--panel:#121722;--panel2:#18202f;--line:#232c3d;--txt:#e8ecf4;--dim:#8a94a8;--acc:#5b8cff;--acc2:#7c5bff;--good:#3ddc84;--warn:#ffb454;--bad:#ff6b6b}
   *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  html{overflow-y:scroll}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:#2b3548;border-radius:6px;border:2px solid var(--bg)}
