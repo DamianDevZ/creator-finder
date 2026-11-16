@@ -849,7 +849,7 @@ for (const [n, l] of Object.entries(lists)) {
 const saveLists = () => localStorage.setItem(LKEY, JSON.stringify(lists));
 const savePools = () => localStorage.setItem(PKEY, JSON.stringify(pools));
 let activeList = null, triageTab = 'queue', triageMode = 'detailed', qi = 0, lastGame = '', pendingVerdict = null, lpOpen = false;
-let creatorTab = 'acc', campTab = 'tmpl';
+let creatorTab = 'acc', campTab = 'tmpl', keyAddOpen = false;
 let lastInput = '', usedGameNames = new Set(), expanding = false, expandDone = false, expandBuffer = [];
 const notesCache = {}; // channelId -> AI note; survives until candidates enter the pool
 const gameAppids = {}; // lowercase game name -> steam appid, for Covers links
@@ -1069,12 +1069,16 @@ function renderLists() {
           + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button class="ltab" data-act="creset" style="font-size:11px">Reset to default</button><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
     } else if (campTab === 'keys') {
       const chans = l.channels || {};
-      body += campSec('<span class="cs-ic">⚿</span>Add keys',
-        '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line — they get added to the ledger below" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace"></textarea>'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
-        + '<div class="meta" id="ckeycount"></div>'
-        + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Add keys</button></div>')
-        + campSec('<span class="cs-ic">☰</span>All keys — ' + (l.keys || []).length,
+      body += (keyAddOpen
+        ? campSec('<span class="cs-ic">⚿</span>Add keys',
+          '<textarea id="ckeys" rows="5" placeholder="Paste keys, one per line — they get added to the ledger below" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12px;outline:none;resize:vertical;font-family:monospace"></textarea>'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'
+          + '<div class="meta" id="ckeycount"></div>'
+          + '<div><button class="ltab" data-act="keyadd" style="font-size:11px;margin-right:8px">Cancel</button>'
+          + '<button class="btn" data-act="keyssave" style="padding:7px 16px;font-size:12px">Add keys</button></div></div>')
+        : '')
+        + campSec('<span class="cs-ic">☰</span>All keys — ' + (l.keys || []).length
+          + '<button class="ltab" data-act="keyadd" style="margin-left:auto;font-size:11px;text-transform:none">+ Add keys</button>',
           (l.keys || []).length
             ? '<div class="keyrow khead"><span>Key</span><span>Added</span><span>Assigned to</span><span>Status</span><span>Since</span><span></span></div>'
             + l.keys.map((k) => {
@@ -1259,6 +1263,9 @@ document.addEventListener('click', (e) => {
     campTab = b.dataset.v; renderLists();
   } else if (act === 'ctab') {
     creatorTab = b.dataset.v; renderLists();
+  } else if (act === 'keyadd') {
+    keyAddOpen = !keyAddOpen; renderLists();
+    if (keyAddOpen) setTimeout(() => $('ckeys') && $('ckeys').focus(), 50);
   } else if (act === 'keyssave') {
     const l = lists[activeList]; if (!l || !$('ckeys')) return;
     const want = $('ckeys').value.split('\\n').map((x) => x.trim()).filter(Boolean);
@@ -1267,7 +1274,7 @@ document.addEventListener('click', (e) => {
     let added = 0;
     l.keys ||= [];
     for (const k of want) { if (!have.has(k) && !seen.has(k)) { seen.add(k); l.keys.push({ k, st: 'free', added: Date.now() }); added++; } }
-    $('ckeys').value = '';
+    $('ckeys').value = ''; keyAddOpen = false;
     saveLists(); renderLists();
   } else if (act === 'keydel') {
     const l = lists[activeList]; if (!l) return;
