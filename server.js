@@ -210,13 +210,17 @@ const HTML = `<!DOCTYPE html>
   .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
   .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
   .kchip.claimed{border-color:#d4a017;color:#e8c35a}.kchip.redeemed{border-color:var(--good);color:var(--good)}
-  .campsec{background:linear-gradient(180deg,rgba(91,140,255,.05),transparent 90px),var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+  .campsec{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
   .cs-head{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
-  .cs-ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,rgba(91,140,255,.2),rgba(124,91,255,.2));color:var(--acc);font-size:13px;flex-shrink:0}
+  .cs-ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(91,140,255,.14);color:var(--acc);font-size:13px;flex-shrink:0}
+  .ptabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .ptab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:14px;font-size:14px;font-weight:700;color:var(--dim);cursor:pointer;font-family:inherit}
+  .ptab.on{color:var(--txt);border-bottom-color:var(--acc)}
+  .ptab:hover{color:var(--txt)}
   .keyrow{display:grid;grid-template-columns:minmax(0,1fr) 86px 140px 66px 86px 26px;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);font-size:12px}
   .keyrow.khead{border-top:none;padding:0 4px 8px;color:var(--dim);font-size:10px;letter-spacing:.7px;text-transform:uppercase;font-weight:700}
   .keyrow .kmono{font-family:monospace;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:3px 8px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .draftcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:linear-gradient(180deg,rgba(91,140,255,.04),transparent 70px),var(--panel)}
+  .draftcard{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:var(--panel2)}
   .dc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .dc-av{width:34px;height:34px;border-radius:50%;flex-shrink:0;background:var(--bg3)}
   .dmail{border:1px solid var(--line);border-radius:10px;margin-top:10px;overflow:hidden}
@@ -883,7 +887,7 @@ function updTabs() {
     if (t) t.textContent = label + ' (' + cnt[k] + ')';
   }
   const ct = $('lists').querySelector('[data-act="tab"][data-v="camp"]');
-  if (ct) ct.textContent = '✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '');
+  if (ct) ct.textContent = '✉ Campaign';
 }
 
 function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
@@ -991,22 +995,15 @@ function renderLists() {
   const queue = Object.values(pool).filter((r) => !((l && l.verdicts) || {})[r.channelId]).slice(qi);
   const shown = triageMode === 'detailed' ? queue.slice(0, 3) : queue.slice(0, 10);
 
-  let body = '<div class="listbar" style="margin-bottom:14px">'
+  let body = l ? '' : '<div class="listbar" style="margin-bottom:14px">'
     + '<div style="position:relative">'
-    + (l
-      ? '<span style="font-weight:700;font-size:14px">' + esc(activeList) + '</span>'
-      : '<button class="lpbtn" data-act="lpmenu"><span style="color:var(--dim)">Select list…</span><span class="car">▾</span></button>'
-      + (lpOpen
-        ? '<div class="lpmenu">'
-        + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
-        + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
-        : ''))
-    + '</div>'
-    + (l
-      ? '<span style="margin-left:20px"></span>'
-      + '<button class="mtab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">Creators</button>'
-      + '<button class="mtab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp" style="margin-left:16px">✉ Campaign' + (Object.keys(l.sent || {}).length ? ' · ' + Object.keys(l.sent).length + ' sent' : '') + '</button>'
+    + '<button class="lpbtn" data-act="lpmenu"><span style="color:var(--dim)">Select list…</span><span class="car">▾</span></button>'
+    + (lpOpen
+      ? '<div class="lpmenu">'
+      + gameLists.map((n) => '<div class="lpmi' + (n === activeList ? ' on' : '') + '" data-act="lpick" data-v="' + esc(n) + '">' + esc(n) + '</div>').join('')
+      + '<div class="lpmi" data-act="lnew" style="color:var(--acc)">+ New list…</div></div>'
       : '')
+    + '</div>'
     + '<span style="margin-left:auto"></span>'
     + '</div>';
 
@@ -1113,7 +1110,12 @@ function renderLists() {
         : qTable(rows, 110, moveBtns, creatorTab === 'acc' ? (r) => chanStatus(l, r) : null))
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
-  el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
+  el.innerHTML = l
+    ? '<div class="panel" style="margin-top:16px;padding:0;overflow:hidden"><div class="ptabs">'
+      + '<button class="ptab' + (triageTab === 'creators' ? ' on' : '') + '" data-act="tab" data-v="creators">👤 Creators</button>'
+      + '<button class="ptab' + (triageTab === 'camp' ? ' on' : '') + '" data-act="tab" data-v="camp">✉ Campaign</button>'
+      + '</div><div style="padding:20px">' + body + '</div></div>'
+    : '<div class="panel" style="margin-top:16px">' + body + '</div>';
   if (triageTab === 'camp' && l) { updKeyCount(); renderPreviews(); }
 }
 
