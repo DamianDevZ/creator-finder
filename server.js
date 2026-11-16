@@ -238,7 +238,10 @@ const HTML = `<!DOCTYPE html>
   @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .qt td:last-child{padding-right:20px}
   /* detailed creator card */
-  .qcard2{display:flex;gap:22px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:12px}
+  .qcard2{display:flex;gap:16px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px}
+  .qc-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-width:96px;padding-left:18px;border-left:1px solid var(--line)}
+  .qc-status .qc-sl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:700}
+  .qc-status .pill{font-size:12px;padding:5px 12px;min-width:0;text-decoration:none}
   .qc-left{width:190px;flex-shrink:0;text-align:center;align-self:center}
   .qc-left img{width:84px;height:84px;border-radius:50%}
   .qcard2 .qc-name{display:block;font-weight:700;font-size:15px;color:var(--txt);text-decoration:none;margin-top:10px}
@@ -938,12 +941,13 @@ function detailCard(r, btns, status) {
         + '<button class="vb" data-act="covno" data-cid="' + r.channelId + '" style="margin-left:4px">Dismiss</button>')
       + '</div>' : '')
     + '</div>'
-    + '<div class="qc-act" style="flex-direction:column;align-items:flex-end;align-self:stretch;justify-content:space-between">'
-    + (status || '<span></span>') + '<div style="display:flex;gap:8px">' + btns + '</div></div>'
-    + '</div></div></div>';
+    + '<div class="qc-act">' + btns + '</div>'
+    + '</div></div>'
+    + (status ? '<div class="qc-status"><span class="qc-sl">Status</span>' + status + '</div>' : '')
+    + '</div>';
 }
 
-function qRow(r, btns) {
+function qRow(r, btns, statusFn) {
   const cls = r.score >= 60 ? 'p-good' : r.score >= 45 ? 'p-mid' : 'p-bad';
   const thumb = r.thumb ? '<img src="' + r.thumb + '" style="width:34px;height:34px;border-radius:50%">' : '<img style="width:34px;height:34px;border-radius:50%;background:var(--panel2)">';
   return '<tr><td><span class="pill ' + cls + '">' + r.score + '</span></td>'
@@ -951,13 +955,14 @@ function qRow(r, btns) {
     + '<td class="num">' + fmt(r.subs) + '</td>'
     + '<td><span class="meta" style="font-size:12px">' + esc(r.language || 'English') + '</span></td>'
     + '<td>' + (r.emails.length ? '<span class="emailchip">Yes</span>' : '<span class="meta">—</span>') + '</td>'
-    + '<td><div class="vbtns">' + btns(r) + '</div></td></tr>';
+    + '<td><div class="vbtns">' + btns(r) + '</div></td>'
+    + (statusFn ? '<td>' + statusFn(r) + '</td>' : '') + '</tr>';
 }
 
-function qTable(rows, lastW, btns) {
+function qTable(rows, lastW, btns, statusFn) {
   return '<table class="qt">'
-    + '<tr><th style="width:56px">Score</th><th>Channel</th><th style="width:70px">Subs</th><th style="width:78px">Language</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th></tr>'
-    + rows.map((r) => qRow(r, btns)).join('') + '</table>';
+    + '<tr><th style="width:56px">Score</th><th>Channel</th><th style="width:70px">Subs</th><th style="width:78px">Language</th><th style="width:62px">Email</th><th style="width:' + lastW + 'px"></th>' + (statusFn ? '<th style="width:96px">Status</th>' : '') + '</tr>'
+    + rows.map((r) => qRow(r, btns, statusFn)).join('') + '</table>';
 }
 
 let renaming = null, openMenu = null;
@@ -1123,7 +1128,7 @@ function renderLists() {
     body += rows.length
       ? (triageMode === 'detailed'
         ? rows.map((r) => detailCard(r, moveBtns(r), creatorTab === 'acc' ? chanStatus(l, r) : '')).join('')
-        : qTable(rows, 190, moveBtns))
+        : qTable(rows, 110, moveBtns, creatorTab === 'acc' ? (r) => chanStatus(l, r) : null))
       : '<div class="meta" style="padding:24px;text-align:center">Nothing here yet.</div>';
   }
   el.innerHTML = '<div class="panel" style="margin-top:16px">' + body + '</div>';
@@ -1384,8 +1389,8 @@ const chanStatus = (l, r) => {
   if (r.coverage) return '<a class="pill p-mid" href="' + esc(r.coverage.url) + '" target="_blank" title="Suspected coverage — click to open the video">Covered?</a>';
   const ks = assignedKeys(l, r.channelId);
   if (ks.some((k) => k.st === 'claimed' || k.st === 'redeemed')) return '<span class="pill p-good">Claimed</span>';
-  if (l.sent && l.sent[r.channelId]) return '<span class="pill p-good">Sent</span>';
-  return '<span class="pill p-bad">Not sent</span>';
+  if (l.sent && l.sent[r.channelId]) return '<span class="pill p-mid">Sent</span>';
+  return '<span class="pill" style="background:rgba(140,150,170,.12);color:var(--dim)">Not sent</span>';
 };
 const freeKeys = (l) => (l.keys || []).filter((k) => k.st === 'free');
 const KSTATUS = { sent: 'sent', claimed: 'claimed', redeemed: 'redeemed' };
