@@ -91,7 +91,7 @@ const HTML = `<!DOCTYPE html>
   .navacct{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
   .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
   .navacct.ghost:hover{border-color:var(--dim)}
-  .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1}
+  .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1;display:flex;flex-direction:column}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
@@ -401,6 +401,7 @@ const HTML = `<!DOCTYPE html>
   </div>
 
   <div id="notifs"></div>
+  <div style="flex:1"></div>
   <footer class="meta" style="margin-top:36px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;justify-content:center;font-size:12px">
     <a href="/privacy" style="color:var(--dim)">Privacy Policy</a>
     <a href="/terms" style="color:var(--dim)">Terms of Service</a>
@@ -1044,8 +1045,8 @@ function renderLists() {
         + campField('Your email', 'cemail', c.email || s.email || '')
         + '</div><div style="margin-top:10px">'
         + campField('Subject', 'csubject', c.subject || '') + '</div>')
-        + campSec('Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none">✦ Generate with AI</button>',
-          '<textarea id="ctemplate" rows="10" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
+        + campSec('Email template<button class="ltab" id="cgenbtn" data-act="cgen" style="float:right;font-size:11px;text-transform:none;margin-top:-5px">✦ Generate with AI</button>',
+          '<textarea id="ctemplate" rows="16" style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:10px 12px;font-size:12.5px;line-height:1.6;outline:none;resize:vertical;font-family:inherit">'
           + esc(c.template || DEF_TPL) + '</textarea>'
           + '<div class="meta" style="font-size:10.5px;margin-top:6px">Variables: {name} channel · {alias} first name · {note} what they do · {keyoffer} count-aware key offer · {keys} key list · {game} · {dev}</div>'
           + '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save template</button></div>');
