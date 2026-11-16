@@ -98,11 +98,14 @@ const HTML = `<!DOCTYPE html>
   .navacct.ghost{background:transparent;color:var(--txt);border-color:var(--line)}
   .navacct.ghost:hover{border-color:var(--dim)}
   .wrap{max-width:1200px;margin:0 auto;padding:36px 20px;flex:1;display:flex;flex-direction:column}
-  .wrap.home{justify-content:center;align-items:center}
-  .wrap.home>*{width:min(700px,100%)}
-  .wrap.home .titlerow{justify-content:center}
-  .wrap.home .sub{text-align:center}
-  .wrap.home .flexsp{display:none}
+  .wrap.home{justify-content:flex-start;align-items:center}
+  .wrap.home>*{width:min(720px,100%)}
+  .wrap.home .titlerow{justify-content:center;margin-top:14vh}
+  .wrap.home #viewtitle{font-size:34px;letter-spacing:-.5px}
+  .wrap.home .sub{text-align:center;font-size:14.5px;margin-top:10px}
+  .wrap.home .searchbar{padding:12px;border-radius:16px;margin-top:26px}
+  .wrap.home .searchbar input{font-size:17px}
+  .wrap.home .searchbar .btn{padding:12px 28px;font-size:15px}
   .logo{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)}
   .logo b{color:var(--acc)}
   h1{font-size:28px;font-weight:700;margin:6px 0 4px}
