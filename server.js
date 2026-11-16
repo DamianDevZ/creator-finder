@@ -198,7 +198,9 @@ const HTML = `<!DOCTYPE html>
   .lpmi:hover{background:var(--bg3)}
   .lpmi.on{color:var(--acc);font-weight:600}
   .lmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:200}
-  .lmbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .lmbox{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:300px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .mx{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:4px}
+  .mx:hover{color:var(--txt)}
   #notifs{position:fixed;top:14px;right:14px;z-index:400;display:flex;flex-direction:column;gap:8px;max-width:360px}
   .notifitem{background:var(--panel);border:1px solid var(--acc);border-radius:10px;padding:10px 14px;font-size:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center}
   .kchip{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font:11px monospace;cursor:pointer;margin:2px 4px 2px 0}
@@ -359,6 +361,7 @@ const HTML = `<!DOCTYPE html>
 
   <div id="amodal" class="lmodal" style="display:none">
     <div class="lmbox" style="width:400px">
+      <button class="mx" data-act="amcancel">✕</button>
       <div style="font-weight:700;margin-bottom:4px">Add a creator</div>
       <div class="meta" style="font-size:11.5px;margin-bottom:12px">Search YouTube — pick a channel to add it to this list.</div>
       <input id="aq" placeholder="Channel name…" autocomplete="off">
@@ -371,6 +374,7 @@ const HTML = `<!DOCTYPE html>
 
   <div id="cmodal" class="lmodal" style="display:none">
     <div class="lmbox" style="width:640px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <button class="mx" data-act="ccancel">✕</button>
       <div style="font-weight:700;margin-bottom:2px">Email campaign</div>
       <div class="meta" style="font-size:11.5px;margin-bottom:14px">One template → a personalized draft for every accepted creator.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
@@ -394,6 +398,26 @@ const HTML = `<!DOCTYPE html>
         <button class="btn" data-act="csave" style="padding:8px 18px;font-size:13px">Save & preview drafts</button>
       </div>
       <div id="cpreviews" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <div id="emodal" class="lmodal" style="display:none">
+    <div class="lmbox" style="width:420px">
+      <button class="mx" data-act="ecancel">✕</button>
+      <div style="font-weight:700;margin-bottom:4px">Edit creator</div>
+      <div class="meta" id="echname" style="font-size:11.5px;margin-bottom:4px"></div>
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Alias (first name)</div>
+      <input id="ealias" autocomplete="off">
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Notes</div>
+      <input id="enote" autocomplete="off">
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Covers — games, comma-separated</div>
+      <input id="egames" autocomplete="off">
+      <div class="meta" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Emails — comma-separated</div>
+      <input id="eemails" autocomplete="off">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="ltab" data-act="ecancel">Cancel</button>
+        <button class="btn" data-act="esave" style="padding:8px 18px;font-size:13px">Save</button>
+      </div>
     </div>
   </div>
 
@@ -1066,7 +1090,8 @@ function renderLists() {
     const ids = triageTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
     const moveBtns = (r) =>
-      '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">' + 'Back to queue' + '</button>'
+      '<button class="vb" data-act="editchan" data-cid="' + r.channelId + '">Edit</button>'
+      + '<button class="vb" data-act="verdict" data-cid="' + r.channelId + '" data-v="">' + 'Back to queue' + '</button>'
       + '<button class="vb ' + (triageTab === 'acc' ? 'no' : 'ok') + '" data-act="verdict" data-cid="' + r.channelId + '" data-v="' + (triageTab === 'acc' ? 'r' : 'a') + '">' + (triageTab === 'acc' ? 'Move to rejected' : 'Move to accepted') + '</button>';
     body += rows.length
       ? (triageMode === 'detailed'
@@ -1247,6 +1272,28 @@ document.addEventListener('click', (e) => {
     const l = lists[activeList]; if (!l) return;
     const k = (l.keys || []).find((x) => x.k === b.dataset.k && x.cid === b.dataset.cid);
     if (k) { k.st = KNEXT[k.st] || 'sent'; saveLists(); renderPreviews(); }
+  } else if (act === 'editchan') {
+    const r = lists[activeList]?.channels?.[b.dataset.cid]; if (!r) return;
+    editCid = b.dataset.cid;
+    $('echname').textContent = r.channel;
+    $('ealias').value = r.alias || '';
+    $('enote').value = r.aiNote || (r.notes || []).join(' · ');
+    $('egames').value = (r.games || []).join(', ');
+    $('eemails').value = (r.emails || []).join(', ');
+    $('emodal').style.display = 'flex';
+  } else if (act === 'ecancel') {
+    $('emodal').style.display = 'none'; editCid = null;
+  } else if (act === 'esave') {
+    const r = lists[activeList]?.channels?.[editCid];
+    if (r) {
+      r.alias = $('ealias').value.trim();
+      const note = $('enote').value.trim();
+      if (note) { r.aiNote = note; r.notes = [note]; }
+      r.games = $('egames').value.split(',').map((x) => x.trim()).filter(Boolean);
+      r.emails = $('eemails').value.split(',').map((x) => x.trim()).filter(Boolean);
+      saveLists();
+    }
+    $('emodal').style.display = 'none'; editCid = null; renderLists();
   } else if (act === 'covok') {
     const l = lists[activeList]; const ch = l?.channels?.[b.dataset.cid];
     if (ch?.coverage) { ch.coverage.confirmed = true; saveLists(); renderLists(); renderNotifs(); }
@@ -1373,6 +1420,8 @@ $('aq').oninput = () => {
     } catch { $('ares').innerHTML = '<div class="meta" style="padding:10px;font-size:12px">Search failed.</div>'; }
   }, 350);
 };
+
+let editCid = null;
 
 // ---- Coverage detection --------------------------------------------
 // On load: re-scan uploads of every creator we've contacted, looking for
