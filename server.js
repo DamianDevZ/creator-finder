@@ -2228,9 +2228,9 @@ function load(){
         +'<td class="dim">'+fmt(u.lastSignIn)+'</td>'
         +'<td class="dim">'+u.scans+' scans · '+u.adds+' adds</td>'
         +'<td style="white-space:nowrap">'
-        +(u.plan==='pro'?'<button class="abtn" onclick="act(this,\'setPlan\',\''+u.id+'\',\'free\')">Make Free</button>':'<button class="abtn pro" onclick="act(this,\'setPlan\',\''+u.id+'\',\'pro\')">Make Pro</button>')
-        +'<button class="abtn" onclick="act(this,\'resetUsage\',\''+u.id+'\')">Reset today</button>'
-        +'<button class="abtn danger" onclick="del(this,\''+u.id+'\',\''+esc(u.email)+'\')">Delete</button>'
+        +(u.plan==='pro'?'<button class="abtn" onclick="act(this,\\\'setPlan\\\',\\\''+u.id+'\\\',\\\'free\\\')">Make Free</button>':'<button class="abtn pro" onclick="act(this,\\\'setPlan\\\',\\\''+u.id+'\\\',\\\'pro\\\')">Make Pro</button>')
+        +'<button class="abtn" onclick="act(this,\\\'resetUsage\\\',\\\''+u.id+'\\\')">Reset today</button>'
+        +'<button class="abtn danger" onclick="del(this,\\\''+u.id+'\\\',\\\''+esc(u.email)+'\\\')">Delete</button>'
         +'</td></tr>';
     }
     document.getElementById('users').innerHTML=ut;
