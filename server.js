@@ -1792,15 +1792,16 @@ document.addEventListener('click', async (e) => {
   } else if (act === 'copyc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
-  } else if (act === 'gmailc' || act === 'mailapp') {
+  } else if (act === 'maildraft') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
-    if (!r) return;
-    const camp = readCampForm();
-    const to = (r.emails || [])[0] || '';
-    const su = fillTemplate(camp.subject || '', r, camp, '');
-    const body = draftFor(r, l);
-    if (act === 'gmailc') window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(to) + '&su=' + encodeURIComponent(su) + '&body=' + encodeURIComponent(body), '_blank');
-    else location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(su) + '&body=' + encodeURIComponent(body);
+    if (r) sendDraft(b, r, l);
+  } else if (act === 'mailpick') {
+    const v = b.dataset.v;
+    localStorage.setItem('cf_mailclient', v);
+    const urls = mailMenu && mailMenu._urls;
+    closeMailMenu();
+    if (urls && v === 'app') location.href = urls.app;
+    else if (urls && urls[v]) window.open(urls[v], '_blank');
   } else if (act === 'csvexp') {
     const l = lists[activeList]; if (!l) return;
     const rows = accChannels(l);
@@ -1991,6 +1992,67 @@ function readCampForm() {
   };
 }
 const draftFor = (r, l) => fillTemplate(readCampForm().template, r, readCampForm(), keyTextFor(l, r.channelId));
+
+// One-button draft sending: tries the OS mail handler first (an external
+// app launch blurs the window — that's our detection signal); if nothing
+// handles it, shows a one-time webmail picker and remembers the choice.
+function mailDraftUrls(r, l) {
+  const camp = readCampForm();
+  const to = (r.emails || [])[0] || '';
+  const su = fillTemplate(camp.subject || '', r, camp, '');
+  const body = draftFor(r, l);
+  const e = encodeURIComponent;
+  return {
+    app: 'mailto:' + e(to) + '?subject=' + e(su) + '&body=' + e(body),
+    gmail: 'https://mail.google.com/mail/?view=cm&fs=1&to=' + e(to) + '&su=' + e(su) + '&body=' + e(body),
+    outlook: 'https://outlook.live.com/mail/0/deeplink/compose?to=' + e(to) + '&subject=' + e(su) + '&body=' + e(body),
+    yahoo: 'https://compose.mail.yahoo.com/?to=' + e(to) + '&subject=' + e(su) + '&body=' + e(body),
+  };
+}
+let mailMenu = null;
+function closeMailMenu() { if (mailMenu) { mailMenu.remove(); mailMenu = null; } }
+function showMailChooser(btn, urls) {
+  closeMailMenu();
+  const r = btn.getBoundingClientRect();
+  mailMenu = document.createElement('div');
+  mailMenu.style.cssText = 'position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 32px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:2px;min-width:160px';
+  mailMenu.style.top = (r.bottom + 6) + 'px';
+  mailMenu.style.left = Math.max(8, r.right - 160) + 'px';
+  mailMenu.innerHTML = '<div style="font-size:10px;color:var(--dim);padding:4px 8px 6px;letter-spacing:.08em;text-transform:uppercase">Send via</div>'
+    + [['gmail', 'Gmail'], ['outlook', 'Outlook.com'], ['yahoo', 'Yahoo Mail'], ['app', 'Default mail app']]
+      .map(([k, n]) => '<button class="vb" data-act="mailpick" data-v="' + k + '" style="justify-content:flex-start">' + n + '</button>').join('');
+  mailMenu._urls = urls;
+  document.body.appendChild(mailMenu);
+  setTimeout(() => document.addEventListener('click', function cl(e) {
+    if (mailMenu && !mailMenu.contains(e.target)) { closeMailMenu(); document.removeEventListener('click', cl); }
+  }), 0);
+}
+function tryMailApp(mailto) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (done) return; done = true;
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVis);
+      resolve(v);
+    };
+    const onBlur = () => finish(true);
+    const onVis = () => { if (document.hidden) finish(true); };
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVis);
+    location.href = mailto;
+    setTimeout(() => finish(false), 1400);
+  });
+}
+async function sendDraft(btn, r, l) {
+  const urls = mailDraftUrls(r, l);
+  const pref = localStorage.getItem('cf_mailclient');
+  if (pref === 'app') { location.href = urls.app; return; }
+  if (pref && urls[pref]) { window.open(urls[pref], '_blank'); return; }
+  if (await tryMailApp(urls.app)) { localStorage.setItem('cf_mailclient', 'app'); return; }
+  showMailChooser(btn, urls);
+}
+
 function updKeyCount() {
   const l = lists[activeList]; if (!l || !$('ckeycount')) return;
   const free = freeKeys(l).length, used = (l.keys || []).length - free;
@@ -2048,8 +2110,7 @@ function draftRow(l, r, camp, free) {
     + (assigned.length
       ? '<button class="vb" data-act="dtoggle" data-cid="' + r.channelId + '">' + (open ? 'Collapse' : 'Expand') + '</button>'
       + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
-      + (to ? '<button class="vb" data-act="gmailc" data-cid="' + r.channelId + '" title="Open this draft in Gmail">Gmail</button>'
-        + '<button class="vb" data-act="mailapp" data-cid="' + r.channelId + '" title="Open in your default mail app">Mail</button>' : '')
+      + (to ? '<button class="vb" data-act="maildraft" data-cid="' + r.channelId + '" title="Email this draft — remembers your app (right-click to change)">Email</button>' : '')
       + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
       + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
       : '')
@@ -2132,6 +2193,14 @@ async function checkCoverage() {
   renderNotifs();
   if (activeList) renderLists();
 }
+document.addEventListener('contextmenu', (e) => {
+  const mb = e.target.closest('[data-act="maildraft"]');
+  if (!mb) return;
+  e.preventDefault();
+  const l = lists[activeList], r = l?.channels?.[mb.dataset.cid];
+  if (r) showMailChooser(mb, mailDraftUrls(r, l));
+});
+
 setTimeout(checkCoverage, 1500);
 
 document.addEventListener('input', (e) => {
