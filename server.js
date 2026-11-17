@@ -467,7 +467,7 @@ const HTML = `<!DOCTYPE html>
 <aside id="nav">
   <div class="navlogo"><b>CREATOR</b><span>FINDER</span></div>
   <div class="navguest">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <div id="navwho" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <div style="width:30px;height:30px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--dim)">G</div>
       <div><div style="font-size:13px;font-weight:600">Guest</div><div class="meta" style="font-size:10.5px">lists saved locally</div></div>
     </div>
@@ -1106,6 +1106,14 @@ const SESKEY = 'cf_session';
 let session = null; try { session = JSON.parse(localStorage.getItem(SESKEY)); } catch {}
 function renderAcct() {
   const w = $('navacctwrap'); if (!w) return;
+  const who = $('navwho');
+  if (who) {
+    const local = (session && session.email || '').split('@')[0];
+    const name = session && local ? local.replace(/^./, (c) => c.toUpperCase()) : 'Guest';
+    who.innerHTML = '<div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:'
+      + (session ? 'rgba(91,140,255,.2);color:var(--acc)' : 'var(--bg3);color:var(--dim)') + '">' + esc(name[0] || 'G') + '</div>'
+      + '<div><div style="font-size:13px;font-weight:600">' + esc(name) + '</div><div class="meta" style="font-size:10.5px">' + (session ? 'lists synced to cloud' : 'lists saved locally') + '</div></div>';
+  }
   w.innerHTML = session
     ? '<div class="meta" style="font-size:10.5px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(session.email || '') + '">' + esc(session.email || 'signed in') + '</div>'
       + (isPro() ? '<div class="prochip">PRO</div>' : '<button class="navacct" data-act="tiers" style="margin-bottom:6px">Upgrade to Pro</button>')
