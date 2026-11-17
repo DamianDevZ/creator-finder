@@ -1130,13 +1130,6 @@ async function cloudPull() {
   saveLists(); renderLists();
 }
 let resetToken = '';
-if (/access_token=/.test(location.hash)) {
-  const h = new URLSearchParams(location.hash.slice(1));
-  const at = h.get('access_token');
-  if (at && h.get('type') === 'recovery') { resetToken = at; setTimeout(() => { $('resetmodal').style.display = 'flex'; }, 0); }
-  else if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
-  history.replaceState(null, '', location.pathname + location.search);
-}
 async function initSession() {
   renderAcct();
   if (!session) return;
@@ -1154,12 +1147,23 @@ async function initSession() {
     }
   } else saveSession(null);
 }
-initSession();
-// First-visit welcome: shows once per device for signed-out visitors.
-if (!session && !localStorage.getItem('cf_welcomed')) {
-  localStorage.setItem('cf_welcomed', '1');
-  $('welmodal').style.display = 'flex';
-}
+// Deferred past script eval: session paths touch consts (isPro/plan) declared
+// below, so running startup inline would hit TDZ and kill every handler.
+setTimeout(() => {
+  if (/access_token=/.test(location.hash)) {
+    const h = new URLSearchParams(location.hash.slice(1));
+    const at = h.get('access_token');
+    if (at && h.get('type') === 'recovery') { resetToken = at; $('resetmodal').style.display = 'flex'; }
+    else if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  initSession();
+  // First-visit welcome: shows once per device for signed-out visitors.
+  if (!session && !localStorage.getItem('cf_welcomed')) {
+    localStorage.setItem('cf_welcomed', '1');
+    $('welmodal').style.display = 'flex';
+  }
+}, 0);
 
 // ---- Plans ---------------------------------------------------------------
 const PRO_PRICE = '$5';
