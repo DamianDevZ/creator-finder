@@ -2174,6 +2174,87 @@ const readBody = async (req) => {
   return JSON.parse(b);
 };
 
+const ADMIN_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder — admin</title>
+<style>
+body{background:#0b0e14;color:#c8d0e0;font:14px/1.6 system-ui;max-width:980px;margin:0 auto;padding:36px 20px 60px}
+h1{color:#fff;font-size:20px}
+h2{color:#8b9dff;font-size:12.5px;text-transform:uppercase;letter-spacing:1.2px;margin:30px 0 10px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{border-bottom:1px solid #1e2433;padding:8px 10px;text-align:left}
+th{color:#8b9dff;font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px}
+tr:hover td{background:#10141d}
+.chips{display:flex;gap:12px;flex-wrap:wrap}
+.chip{background:#11151f;border:1px solid #2a3142;border-radius:10px;padding:12px 18px}
+.chip b{display:block;color:#fff;font-size:21px}
+.chip span{color:#5b6478;font-size:11.5px}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.pill.pro{background:rgba(91,140,255,.16);color:#8b9dff;border:1px solid rgba(91,140,255,.4)}
+.pill.free{background:#161b26;color:#5b6478;border:1px solid #2a3142}
+.abtn{background:#161b26;border:1px solid #2a3142;color:#c8d0e0;border-radius:7px;padding:5px 10px;font-size:11.5px;cursor:pointer;margin-right:6px}
+.abtn:hover{border-color:#8b9dff;color:#fff}
+.abtn.pro{background:rgba(91,140,255,.14);border-color:rgba(91,140,255,.4);color:#8b9dff}
+.abtn.danger:hover{border-color:#e05563;color:#e05563}
+.dim{color:#5b6478;font-size:12px}
+.hdr{display:flex;align-items:center;gap:14px}
+#msg{font-size:12px;color:#4ec98f;min-height:16px;margin-left:auto}
+</style></head><body>
+<div class="hdr"><h1>Creator Finder <span class="dim" style="font-size:13px">admin</span></h1><span id="msg"></span><button class="abtn" onclick="load()">Refresh</button></div>
+<h2>Overview</h2><div class="chips" id="chips"></div>
+<h2>Users</h2><table id="users"></table>
+<h2>Top covered games</h2><table id="games"></table>
+<h2>Last 7 days</h2><table id="days"></table>
+<h2>Login IPs</h2><table id="ips"></table>
+<script>
+var K = new URLSearchParams(location.search).get('key') || '';
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
+function msg(t){var m=document.getElementById('msg');m.textContent=t;setTimeout(function(){m.textContent=''},2500)}
+function fmt(ts){if(!ts)return 'never';var d=new Date(ts);return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+function load(){
+  fetch('/api/admin/stats?key='+encodeURIComponent(K)).then(function(r){return r.json()}).then(function(s){
+    var chips='<div class="chip"><b>'+s.users.length+'</b><span>users</span></div>'
+      +'<div class="chip"><b>'+(s.plans.pro||0)+'</b><span>pro</span></div>'
+      +'<div class="chip"><b>'+(s.plans.free||0)+'</b><span>free</span></div>'
+      +'<div class="chip"><b>'+s.graph.games+'</b><span>games</span></div>'
+      +'<div class="chip"><b>'+s.graph.creators+'</b><span>creators</span></div>'
+      +'<div class="chip"><b>'+s.graph.edges+'</b><span>edges</span></div>';
+    document.getElementById('chips').innerHTML=chips;
+    var ut='<tr><th>Email</th><th>Plan</th><th>Via</th><th>Joined</th><th>Last sign-in</th><th>Today</th><th></th></tr>';
+    for (var i=0;i<s.users.length;i++){
+      var u=s.users[i];
+      ut+='<tr><td>'+esc(u.email)+'<div class="dim">'+esc(u.id.slice(0,8))+'</div></td>'
+        +'<td><span class="pill '+u.plan+'">'+esc(u.plan).toUpperCase()+'</span></td>'
+        +'<td class="dim">'+esc(u.providers.join('+'))+'</td>'
+        +'<td class="dim">'+fmt(u.created)+'</td>'
+        +'<td class="dim">'+fmt(u.lastSignIn)+'</td>'
+        +'<td class="dim">'+u.scans+' scans · '+u.adds+' adds</td>'
+        +'<td style="white-space:nowrap">'
+        +(u.plan==='pro'?'<button class="abtn" onclick="act(this,\'setPlan\',\''+u.id+'\',\'free\')">Make Free</button>':'<button class="abtn pro" onclick="act(this,\'setPlan\',\''+u.id+'\',\'pro\')">Make Pro</button>')
+        +'<button class="abtn" onclick="act(this,\'resetUsage\',\''+u.id+'\')">Reset today</button>'
+        +'<button class="abtn danger" onclick="del(this,\''+u.id+'\',\''+esc(u.email)+'\')">Delete</button>'
+        +'</td></tr>';
+    }
+    document.getElementById('users').innerHTML=ut;
+    var gt='<tr><th>Game</th><th>Creator edges</th><th>Status</th></tr>';
+    for (i=0;i<s.topGames.length;i++){var g=s.topGames[i];gt+='<tr><td>'+esc(g.name)+'</td><td>'+g.n+'</td><td>'+(g.n>=8?'<span class="pill pro">covered</span>':'<span class="pill free">'+g.n+'/8</span>')+'</td></tr>'}
+    document.getElementById('games').innerHTML=gt;
+    var dt='<tr><th>Day</th><th>Scans</th><th>Adds</th><th>Logins</th><th>Scanners</th><th>Adders</th></tr>';
+    for (i=0;i<s.byDay.length;i++){var d=s.byDay[i];dt+='<tr><td>'+d.day+'</td><td>'+d.scans+'</td><td>'+d.adds+'</td><td>'+d.logins+'</td><td>'+d.scanners+'</td><td>'+d.adders+'</td></tr>'}
+    document.getElementById('days').innerHTML=dt;
+    var it='<tr><th>Day · IP · Subject</th></tr>';
+    if(!s.loginIps.length)it+='<tr><td class="dim">none yet</td></tr>';
+    for (i=0;i<s.loginIps.length;i++)it+='<tr><td class="dim">'+esc(s.loginIps[i])+'</td></tr>';
+    document.getElementById('ips').innerHTML=it;
+  }).catch(function(e){msg('load failed')});
+}
+function act(btn,a,uid,plan){
+  btn.disabled=true;
+  fetch('/api/admin/action?key='+encodeURIComponent(K),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:a,uid:uid,plan:plan})})
+    .then(function(){msg('done');load()}).catch(function(){btn.disabled=false});
+}
+function del(btn,uid,email){if(confirm('Delete '+email+'? Removes the account, plan and synced lists.'))act(btn,'deleteUser',uid)}
+load();
+</script></body></html>`;
+
 export const handler = async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const json = (code, obj) => {
@@ -2348,19 +2429,40 @@ h2{color:#e6ebf5;font-size:18px;margin:32px 0 10px}p{margin:12px 0}ul{padding-le
 strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;padding:8px 16px;border:1px solid #2a3142;border-radius:8px;text-decoration:none}
 </style></head><body>${html}<a class="back" href="/">← Back to Creator Finder</a></body></html>`);
     }
+    if (req.method === 'POST' && url.pathname === '/api/admin/action') {
+      const b = await readBody(req);
+      const key = req.headers['x-admin-key'] || url.searchParams.get('key') || '';
+      if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return json(403, { error: 'forbidden' });
+      const today = new Date().toISOString().slice(0, 10);
+      if (b.action === 'setPlan' && b.uid) {
+        await setPlan(b.uid, b.plan === 'pro' ? 'pro' : 'free');
+      } else if (b.action === 'resetUsage' && b.uid) {
+        await sbRest(`/cf_usage?day=eq.${today}&or=(subject.eq.u:${b.uid},subject.eq.adds:u:${b.uid})`, { method: 'DELETE' }).catch(() => {});
+      } else if (b.action === 'deleteUser' && b.uid) {
+        await fetch(`${SB_URL}/auth/v1/admin/users/${b.uid}`, { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }).catch(() => {});
+        await sbRest(`/cf_profiles?user_id=eq.${b.uid}`, { method: 'DELETE' }).catch(() => {});
+        await sbRest(`/cf_user_lists?user_id=eq.${b.uid}`, { method: 'DELETE' }).catch(() => {});
+      }
+      return json(200, { ok: true });
+    }
     if (req.method === 'GET' && (url.pathname === '/api/admin/stats' || url.pathname === '/admin')) {
       const key = req.headers['x-admin-key'] || url.searchParams.get('key') || '';
       if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) return json(403, { error: 'forbidden' });
       const weekAgo = new Date(Date.now() - 7 * DAY).toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
       const sbCount = async (table) => {
         const r = await sbRest(`/${table}?select=*`, { method: 'HEAD', headers: { Prefer: 'count=exact' } }).catch(() => null);
         const m = /\/(\d+)/.exec(r?.headers.get('content-range') || '');
         return m ? +m[1] : null;
       };
       const usage = await sbRest(`/cf_usage?day=gte.${weekAgo}&select=subject,day,scans`).then((r) => r.json()).catch(() => []);
-      const profiles = await sbRest('/cf_profiles?select=plan').then((r) => r.json()).catch(() => []);
+      const profiles = await sbRest('/cf_profiles?select=user_id,plan').then((r) => r.json()).catch(() => []);
+      const au = await fetch(`${SB_URL}/auth/v1/admin/users?per_page=1000`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }).then((r) => r.json()).catch(() => ({}));
+      const coverage = await sbRest('/cf_coverage?select=game,game_name&limit=10000').then((r) => r.json()).catch(() => []);
       const days = {};
       const loginIps = new Set();
+      const planById = {}, todayById = {};
+      for (const p of Array.isArray(profiles) ? profiles : []) planById[p.user_id] = p.plan;
       for (const row of Array.isArray(usage) ? usage : []) {
         const d = (days[row.day] ||= { scans: 0, adds: 0, logins: 0, scanners: new Set(), adders: new Set(), loginsBy: new Set() });
         if (row.subject.startsWith('adds:')) { d.adds += row.scans; d.adders.add(row.subject); }
@@ -2369,29 +2471,29 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
           const ip = /ip:(.+)$/.exec(row.subject)?.[1]; if (ip) loginIps.add(`${row.day} ${ip} ${row.subject}`);
         }
         else { d.scans += row.scans; d.scanners.add(row.subject); }
+        if (row.day === today) {
+          const m = /^(adds:)?u:([0-9a-f-]{36})/.exec(row.subject);
+          if (m) { const t = (todayById[m[2]] ||= { scans: 0, adds: 0 }); t[m[1] ? 'adds' : 'scans'] += row.scans; }
+        }
       }
+      const gameEdges = {};
+      for (const row of Array.isArray(coverage) ? coverage : []) { const g = (gameEdges[row.game] ||= { name: row.game_name, n: 0 }); g.n++; }
       const stats = {
-        plans: Object.fromEntries((Array.isArray(profiles) ? profiles : []).reduce((m, p) => m.set(p.plan || 'free', (m.get(p.plan || 'free') || 0) + 1), new Map())),
+        plans: Object.values(planById).reduce((m, p) => (m[p || 'free'] = (m[p || 'free'] || 0) + 1, m), {}),
         byDay: Object.entries(days).sort().map(([day, d]) => ({ day, scans: d.scans, adds: d.adds, logins: d.logins, scanners: d.scanners.size, adders: d.adders.size, loginsBy: d.loginsBy.size })),
         loginIps: [...loginIps],
         graph: { games: await sbCount('cf_games'), creators: await sbCount('cf_creators'), edges: await sbCount('cf_coverage') },
+        topGames: Object.values(gameEdges).sort((a, b) => b.n - a.n).slice(0, 15),
+        users: ((au && au.users) || []).map((u) => ({
+          id: u.id, email: u.email, created: u.created_at, lastSignIn: u.last_sign_in_at,
+          providers: (u.app_metadata && u.app_metadata.providers) || [],
+          plan: planById[u.id] || 'free',
+          ...(todayById[u.id] || { scans: 0, adds: 0 }),
+        })).sort((a, b) => String(b.lastSignIn || '').localeCompare(String(a.lastSignIn || ''))),
       };
       if (url.pathname === '/api/admin/stats') return json(200, stats);
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      return res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Creator Finder — stats</title>
-<style>body{background:#0b0e14;color:#c8d0e0;font:14px/1.6 system-ui;max-width:720px;margin:0 auto;padding:40px 20px}
-h1{color:#fff;font-size:20px}h2{color:#8b9dff;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:28px 0 8px}
-table{border-collapse:collapse;width:100%}td,th{border:1px solid #2a3142;padding:7px 12px;text-align:left;font-size:13px}th{color:#8b9dff}
-.big{display:flex;gap:14px;flex-wrap:wrap}.big div{background:#11151f;border:1px solid #2a3142;border-radius:10px;padding:14px 20px}
-.big b{display:block;color:#fff;font-size:22px}</style></head><body>
-<h1>Creator Finder stats</h1>
-<h2>Plans</h2><div class="big">${Object.entries(stats.plans).map(([p, n]) => `<div><b>${n}</b>${p}</div>`).join('')}</div>
-<h2>Knowledge graph</h2><div class="big">${Object.entries(stats.graph).map(([k, n]) => `<div><b>${n ?? '?'}</b>${k}</div>`).join('')}</div>
-<h2>Last 7 days</h2><table><tr><th>Day</th><th>Scans</th><th>Adds</th><th>Logins</th><th>Scanners</th><th>Adders</th></tr>
-${stats.byDay.map((d) => `<tr><td>${d.day}</td><td>${d.scans}</td><td>${d.adds}</td><td>${d.logins}</td><td>${d.scanners}</td><td>${d.adders}</td></tr>`).join('') || '<tr><td colspan="6">no usage yet</td></tr>'}</table>
-<h2>Login IPs (per user, per day)</h2><table><tr><th>Day · IP · Subject</th></tr>
-${stats.loginIps.map((x) => `<tr><td>${x}</td></tr>`).join('') || '<tr><td>none yet</td></tr>'}</table>
-</body></html>`);
+      return res.end(ADMIN_HTML);
     }
     if (url.pathname.startsWith('/api/auth/')) {
       if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
