@@ -2360,14 +2360,20 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       const usage = await sbRest(`/cf_usage?day=gte.${weekAgo}&select=subject,day,scans`).then((r) => r.json()).catch(() => []);
       const profiles = await sbRest('/cf_profiles?select=plan').then((r) => r.json()).catch(() => []);
       const days = {};
+      const loginIps = new Set();
       for (const row of Array.isArray(usage) ? usage : []) {
-        const d = (days[row.day] ||= { scans: 0, adds: 0, scanners: new Set(), adders: new Set() });
+        const d = (days[row.day] ||= { scans: 0, adds: 0, logins: 0, scanners: new Set(), adders: new Set(), loginsBy: new Set() });
         if (row.subject.startsWith('adds:')) { d.adds += row.scans; d.adders.add(row.subject); }
+        else if (row.subject.startsWith('login:')) {
+          d.logins += row.scans; d.loginsBy.add(row.subject);
+          const ip = /ip:(.+)$/.exec(row.subject)?.[1]; if (ip) loginIps.add(`${row.day} ${ip} ${row.subject}`);
+        }
         else { d.scans += row.scans; d.scanners.add(row.subject); }
       }
       const stats = {
         plans: Object.fromEntries((Array.isArray(profiles) ? profiles : []).reduce((m, p) => m.set(p.plan || 'free', (m.get(p.plan || 'free') || 0) + 1), new Map())),
-        byDay: Object.entries(days).sort().map(([day, d]) => ({ day, scans: d.scans, adds: d.adds, scanners: d.scanners.size, adders: d.adders.size })),
+        byDay: Object.entries(days).sort().map(([day, d]) => ({ day, scans: d.scans, adds: d.adds, logins: d.logins, scanners: d.scanners.size, adders: d.adders.size, loginsBy: d.loginsBy.size })),
+        loginIps: [...loginIps],
         graph: { games: await sbCount('cf_games'), creators: await sbCount('cf_creators'), edges: await sbCount('cf_coverage') },
       };
       if (url.pathname === '/api/admin/stats') return json(200, stats);
@@ -2381,8 +2387,10 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #2a3142;padding
 <h1>Creator Finder stats</h1>
 <h2>Plans</h2><div class="big">${Object.entries(stats.plans).map(([p, n]) => `<div><b>${n}</b>${p}</div>`).join('')}</div>
 <h2>Knowledge graph</h2><div class="big">${Object.entries(stats.graph).map(([k, n]) => `<div><b>${n ?? '?'}</b>${k}</div>`).join('')}</div>
-<h2>Last 7 days</h2><table><tr><th>Day</th><th>Scans</th><th>Adds</th><th>Scanners</th><th>Adders</th></tr>
-${stats.byDay.map((d) => `<tr><td>${d.day}</td><td>${d.scans}</td><td>${d.adds}</td><td>${d.scanners}</td><td>${d.adders}</td></tr>`).join('') || '<tr><td colspan="5">no usage yet</td></tr>'}</table>
+<h2>Last 7 days</h2><table><tr><th>Day</th><th>Scans</th><th>Adds</th><th>Logins</th><th>Scanners</th><th>Adders</th></tr>
+${stats.byDay.map((d) => `<tr><td>${d.day}</td><td>${d.scans}</td><td>${d.adds}</td><td>${d.logins}</td><td>${d.scanners}</td><td>${d.adders}</td></tr>`).join('') || '<tr><td colspan="6">no usage yet</td></tr>'}</table>
+<h2>Login IPs (per user, per day)</h2><table><tr><th>Day · IP · Subject</th></tr>
+${stats.loginIps.map((x) => `<tr><td>${x}</td></tr>`).join('') || '<tr><td>none yet</td></tr>'}</table>
 </body></html>`);
     }
     if (url.pathname.startsWith('/api/auth/')) {
@@ -2410,11 +2418,14 @@ ${stats.byDay.map((d) => `<tr><td>${d.day}</td><td>${d.scans}</td><td>${d.adds}<
         }
         if (j.id) await ensureProfile(j.id);
         const lr = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
+        if (j.id) usageBump(`login:u:${j.id}:ip:${ipOf(req)}`);
         return json(lr.status, await lr.json().catch(() => ({})));
       }
       if (url.pathname === '/api/auth/login' && req.method === 'POST') {
         const r = await sbAuth('/token?grant_type=password', { email: b.email, password: b.password });
-        return json(r.status, await r.json().catch(() => ({})));
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.user?.id) usageBump(`login:u:${j.user.id}:ip:${ipOf(req)}`);
+        return json(r.status, j);
       }
       if (url.pathname === '/api/auth/refresh' && req.method === 'POST') {
         const r = await sbAuth('/token?grant_type=refresh_token', { refresh_token: b.refresh_token });
