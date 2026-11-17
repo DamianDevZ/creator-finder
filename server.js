@@ -1797,7 +1797,6 @@ document.addEventListener('click', async (e) => {
     if (r) sendDraft(b, r, l);
   } else if (act === 'mailpick') {
     const v = b.dataset.v;
-    localStorage.setItem('cf_mailclient', v);
     const urls = mailMenu && mailMenu._urls;
     closeMailMenu();
     if (urls && v === 'app') location.href = urls.app;
@@ -2027,30 +2026,8 @@ function showMailChooser(btn, urls) {
     if (mailMenu && !mailMenu.contains(e.target)) { closeMailMenu(); document.removeEventListener('click', cl); }
   }), 0);
 }
-function tryMailApp(mailto) {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (v) => {
-      if (done) return; done = true;
-      window.removeEventListener('blur', onBlur);
-      document.removeEventListener('visibilitychange', onVis);
-      resolve(v);
-    };
-    const onBlur = () => finish(true);
-    const onVis = () => { if (document.hidden) finish(true); };
-    window.addEventListener('blur', onBlur);
-    document.addEventListener('visibilitychange', onVis);
-    location.href = mailto;
-    setTimeout(() => finish(false), 1400);
-  });
-}
-async function sendDraft(btn, r, l) {
-  const urls = mailDraftUrls(r, l);
-  const pref = localStorage.getItem('cf_mailclient');
-  if (pref === 'app') { location.href = urls.app; return; }
-  if (pref && urls[pref]) { window.open(urls[pref], '_blank'); return; }
-  if (await tryMailApp(urls.app)) { localStorage.setItem('cf_mailclient', 'app'); return; }
-  showMailChooser(btn, urls);
+function sendDraft(btn, r, l) {
+  showMailChooser(btn, mailDraftUrls(r, l));
 }
 
 function updKeyCount() {
@@ -2110,7 +2087,7 @@ function draftRow(l, r, camp, free) {
     + (assigned.length
       ? '<button class="vb" data-act="dtoggle" data-cid="' + r.channelId + '">' + (open ? 'Collapse' : 'Expand') + '</button>'
       + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
-      + (to ? '<button class="vb" data-act="maildraft" data-cid="' + r.channelId + '" title="Email this draft — remembers your app (right-click to change)">Email</button>' : '')
+      + (to ? '<button class="vb" data-act="maildraft" data-cid="' + r.channelId + '" title="Email this draft">Email</button>' : '')
       + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
       + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
       : '')
