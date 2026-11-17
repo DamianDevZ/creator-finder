@@ -675,6 +675,10 @@ const HTML = `<!DOCTYPE html>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
+// Inline-positioned modal open: some environments drop the .lmodal class rule,
+// so every modal gets explicit fixed-viewport styles instead of relying on it.
+const MODAL_CSS = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(4,7,12,.84);backdrop-filter:blur(3px)';
+const showModal = (id) => { $(id).style.cssText = MODAL_CSS; };
 const simMap = new Map();
 let fpTags = [];
 
@@ -1153,7 +1157,7 @@ setTimeout(() => {
   if (/access_token=/.test(location.hash)) {
     const h = new URLSearchParams(location.hash.slice(1));
     const at = h.get('access_token');
-    if (at && h.get('type') === 'recovery') { resetToken = at; $('resetmodal').style.display = 'flex'; }
+    if (at && h.get('type') === 'recovery') { resetToken = at; showModal('resetmodal'); }
     else if (at) saveSession({ at, rt: h.get('refresh_token') || '' });
     history.replaceState(null, '', location.pathname + location.search);
   }
@@ -1161,7 +1165,7 @@ setTimeout(() => {
   // First-visit welcome: shows once per device for signed-out visitors.
   if (!session && !localStorage.getItem('cf_welcomed')) {
     localStorage.setItem('cf_welcomed', '1');
-    $('welmodal').style.display = 'flex';
+    showModal('welmodal');
   }
 }, 0);
 
@@ -1199,7 +1203,7 @@ function toast(msg) {
   setTimeout(() => d.remove(), 4200);
 }
 let onb = { step: 'plans', plan: 'free' };
-function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); $('tiermodal').style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:200;background:rgba(4,7,12,.84);backdrop-filter:blur(3px)'; }
+function openTiers(reason) { onb = { step: 'plans', plan: 'free', reason: reason || '' }; renderTiers(); showModal('tiermodal'); }
 const feat = (t) => '<div class="fi"><i>✓</i>' + t + '</div>';
 const GSVG = '<svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.7-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.7-.4-3.9z"/></svg>';
 function renderTiers() {
@@ -1536,7 +1540,7 @@ document.addEventListener('click', async (e) => {
     lpOpen = false; activeList = b.dataset.v; triageTab = 'creators'; qi = 0; renderLists();
   } else if (act === 'lnew') {
     lpOpen = false; pendingVerdict = null;
-    $('lmodal').style.display = 'flex';
+    showModal('lmodal');
     setTimeout(() => $('lmname').focus(), 50);
   } else if (act === 'startlist') {
     const name = ($('newlist').value || $('lpick')?.value || '').trim();
@@ -1546,7 +1550,7 @@ document.addEventListener('click', async (e) => {
   } else if (act === 'verdict') {
     if (!activeList) {
       pendingVerdict = { cid: b.dataset.cid, v: b.dataset.v || null };
-      $('lmodal').style.display = 'flex';
+      showModal('lmodal');
       setTimeout(() => $('lmname').focus(), 50);
       return;
     }
@@ -1628,7 +1632,7 @@ document.addEventListener('click', async (e) => {
     if (box.style.display === 'block') $('navlistname').focus();
   } else if (act === 'acct') {
     $('aerr').textContent = '';
-    $('authmodal').style.display = 'flex';
+    showModal('authmodal');
     setTimeout(() => $('aemail').focus(), 50);
   } else if (act === 'authcancel') {
     $('authmodal').style.display = 'none';
@@ -1675,12 +1679,12 @@ document.addEventListener('click', async (e) => {
   } else if (act === 'welsignin') {
     $('welmodal').style.display = 'none';
     $('aerr').textContent = '';
-    $('authmodal').style.display = 'flex';
+    showModal('authmodal');
     setTimeout(() => $('aemail').focus(), 50);
   } else if (act === 'forgot') {
     $('authmodal').style.display = 'none';
     $('ferr').textContent = '';
-    $('forgotmodal').style.display = 'flex';
+    showModal('forgotmodal');
     setTimeout(() => $('femail').focus(), 50);
   } else if (act === 'forgotcancel') {
     $('forgotmodal').style.display = 'none';
@@ -1703,7 +1707,7 @@ document.addEventListener('click', async (e) => {
         b.disabled = false;
         if (!ok) { $('rerr').textContent = j.error || j.msg || 'Reset failed — request a new link.'; return; }
         $('resetmodal').style.display = 'none'; $('rpass').value = ''; resetToken = '';
-        $('authmodal').style.display = 'flex';
+        showModal('authmodal');
         $('aerr').style.color = 'var(--good)'; $('aerr').textContent = 'Password updated — log in with the new one.';
         setTimeout(() => { $('aerr').style.color = 'var(--bad)'; }, 4000);
       }).catch(() => { b.disabled = false; $('rerr').textContent = 'Network error.'; });
@@ -1738,7 +1742,7 @@ document.addEventListener('click', async (e) => {
         } else { onb.step = 'done'; renderTiers(); }
       }).catch(() => { b.disabled = false; $('tierr').textContent = 'Network error.'; });
   } else if (act === 'addcreator') {
-    $('amodal').style.display = 'flex'; $('aq').value = ''; $('ares').innerHTML = '';
+    showModal('amodal'); $('aq').value = ''; $('ares').innerHTML = '';
     setTimeout(() => $('aq').focus(), 50);
   } else if (act === 'amcancel') {
     $('amodal').style.display = 'none';
@@ -1839,7 +1843,7 @@ document.addEventListener('click', async (e) => {
     $('enote').value = noteOf(r) || (r.notes || []).join(' · ');
     $('egames').value = (r.games || []).join(', ');
     $('eemails').value = (r.emails || []).join(', ');
-    $('emodal').style.display = 'flex';
+    showModal('emodal');
   } else if (act === 'ecancel') {
     $('emodal').style.display = 'none'; editCid = null;
   } else if (act === 'esave') {
