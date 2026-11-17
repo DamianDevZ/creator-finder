@@ -496,15 +496,6 @@ const HTML = `<!DOCTYPE html>
     <button class="btn" id="load">Analyze game</button>
   </div>
 
-  <div class="howto">
-    <div class="howcard"><div class="hic">◈</div><b>Profile your game</b><p>Drop a Steam link and we pull its tags, developer, capsule art, and the games players actually compare it to.</p></div>
-    <div class="howcard"><div class="hic">◎</div><b>Find real fits</b><p>We scan YouTube for channels covering your game or its neighbors, then rank them by meaningful tag overlap, activity, and reach.</p></div>
-    <div class="howcard"><div class="hic">✦</div><b>Personalized outreach</b><p>AI notes capture what each channel does, so every email draft reads like you genuinely watch their content.</p></div>
-    <div class="howcard"><div class="hic">⚿</div><b>Track every key</b><p>Paste your Steam keys once, assign one or more per creator, and follow each from sent to claimed to redeemed.</p></div>
-    <div class="howcard"><div class="hic">⚑</div><b>Know when they cover you</b><p>We keep checking your contacted creators and flag anyone who may have made a video about your game.</p></div>
-    <div class="howcard"><div class="hic">☰</div><b>Lists with a goal</b><p>Set how many creators you want to reach. The queue keeps refilling with fresh candidates until you get there.</p></div>
-  </div>
-
   <div id="base" style="display:none">
     <div class="panel">
       <div id="gamepanel" style="display:flex;gap:20px">
