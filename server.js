@@ -1112,7 +1112,7 @@ function renderAcct() {
     const name = session && local ? local.replace(/^./, (c) => c.toUpperCase()) : 'Guest';
     who.innerHTML = '<div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:'
       + (session ? 'rgba(91,140,255,.2);color:var(--acc)' : 'var(--bg3);color:var(--dim)') + '">' + esc(name[0] || 'G') + '</div>'
-      + '<div><div style="font-size:13px;font-weight:600">' + esc(name) + '</div><div class="meta" style="font-size:10.5px">' + (session ? 'lists synced to cloud' : 'lists saved locally') + '</div></div>';
+      + '<div><div style="font-size:13px;font-weight:600">' + esc(name) + '</div><div class="meta" style="font-size:10.5px">' + (session ? (isPro() ? 'Pro plan' : 'Free plan') : 'lists not saved') + '</div></div>';
   }
   w.innerHTML = session
     ? '<div class="meta" style="font-size:10.5px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(session.email || '') + '">' + esc(session.email || 'signed in') + '</div>'
