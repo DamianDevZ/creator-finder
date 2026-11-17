@@ -830,6 +830,9 @@ $('load').onclick = async () => {
   $('status').innerHTML = '';
   // Clear the previous game's results — a new game means a new queue.
   lastResults = []; lastGame = ''; $('lists').innerHTML = '';
+  // Leave the home hero: top-anchored layout, feature cards hidden.
+  document.querySelector('.wrap').classList.remove('home');
+  window.scrollTo(0, 0);
   // Skeleton state while profiling — panels appear only once data is ready.
   $('base').style.display = 'block';
   $('gametitle').innerHTML = '<span class="spinner" style="width:15px;height:15px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px"></span>Analyzing game…';
@@ -1381,7 +1384,7 @@ function renderLists() {
   renderNav();
   const l = activeList ? lists[activeList] : null;
   const game = lastGame || '';
-  document.querySelector('.wrap').classList.toggle('home', !activeList && !game);
+  document.querySelector('.wrap').classList.toggle('home', !activeList && !game && $('base').style.display !== 'block');
   if (!game && !Object.keys(lists).length) { el.innerHTML = ''; return; }
   const pool = poolFor(game);
   const gameLists = Object.keys(lists);
