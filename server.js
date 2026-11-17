@@ -1527,6 +1527,7 @@ function renderLists() {
       + '<button class="ltab" data-act="goal" style="font-size:11.5px" title="Click to set or edit the outreach goal">🎯 '
       + (l.goal ? '<b>' + acc.length + ' / ' + l.goal + '</b>' + (acc.length >= l.goal ? ' — reached' : '') : 'set goal')
       + '</button>'
+      + '<button class="ltab" data-act="csvexp" style="font-size:11.5px" title="Download the accepted list as CSV">Export CSV</button>'
       + '<button class="ltab" data-act="addcreator" style="font-size:11.5px">+ Creator</button></span></div>';
     const ids = creatorTab === 'acc' ? acc : rej;
     const rows = ids.map((cid) => l.channels[cid]).filter(Boolean);
@@ -2064,7 +2065,6 @@ function renderPreviews() {
   $('cpreviews').innerHTML =
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
     + '<span style="margin-left:auto"></span>'
-    + '<button class="ltab" data-act="csvexp" style="font-size:11px">Export CSV</button>'
     + '<button class="ltab" data-act="dexpall" style="font-size:11px">Expand all</button>'
     + '<button class="ltab" data-act="dcolall" style="font-size:11px">Collapse all</button>'
     + (undrafted ? '<button class="btn" data-act="draftall" style="padding:7px 18px;font-size:12px">Draft all (' + undrafted + ')</button>' : '')
