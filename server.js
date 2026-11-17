@@ -135,10 +135,21 @@ async function dbLogScan(fp, simNames, results) {
         return { key: normGame(g), name: g, appid: String(appid || ''), tags: fp.tags || [], similar_games: (fp.similarGames || []).map((x) => x.name), updated_at: now };
       })),
     }).catch(() => {});
+    // Coverage sightings recorded by the cron live inside data — preserve
+    // them when a rescan overwrites the creator blob.
+    const prior = await sbRest(`/cf_creators?channel_id=in.(${results.map((r) => encodeURIComponent(r.channelId)).join(',')})&select=channel_id,data`)
+      .then((r) => r.json()).catch(() => []);
+    const keep = {};
+    for (const row of Array.isArray(prior) ? prior : [])
+      if (row.data?.coverageHits) keep[row.channel_id] = row.data.coverageHits;
     await sbRest('/cf_creators', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(results.map((r) => ({ channel_id: r.channelId, data: r, updated_at: now }))),
+      body: JSON.stringify(results.map((r) => ({
+        channel_id: r.channelId,
+        data: keep[r.channelId] ? { ...r, coverageHits: keep[r.channelId] } : r,
+        updated_at: now,
+      }))),
     }).catch(() => {});
     const edges = [];
     for (const r of results)
@@ -1780,6 +1791,31 @@ document.addEventListener('click', async (e) => {
   } else if (act === 'copyc') {
     const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
     if (r) navigator.clipboard.writeText(draftFor(r, l)).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy draft', 1200); });
+  } else if (act === 'gmailc' || act === 'mailapp') {
+    const l = lists[activeList], r = l?.channels?.[b.dataset.cid];
+    if (!r) return;
+    const camp = readCampForm();
+    const to = (r.emails || [])[0] || '';
+    const su = fillTemplate(camp.subject || '', r, camp, '');
+    const body = draftFor(r, l);
+    if (act === 'gmailc') window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(to) + '&su=' + encodeURIComponent(su) + '&body=' + encodeURIComponent(body), '_blank');
+    else location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(su) + '&body=' + encodeURIComponent(body);
+  } else if (act === 'csvexp') {
+    const l = lists[activeList]; if (!l) return;
+    const rows = accChannels(l);
+    if (!rows.length) return;
+    const cq = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const lines = [['channel', 'channel_url', 'subscribers', 'language', 'emails', 'status', 'keys', 'coverage_url'].join(',')];
+    for (const r of rows) {
+      const status = r.coverage ? 'covered' : (l.sent && l.sent[r.channelId]) ? 'sent' : 'accepted';
+      const keys = assignedKeys(l, r.channelId).map((k) => k.k + ':' + k.st).join(' ');
+      lines.push([r.channel, 'https://www.youtube.com/channel/' + r.channelId, r.subs ?? '', r.language || '', (r.emails || []).join(' '), status, keys, r.coverage ? r.coverage.url : ''].map(cq).join(','));
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\\r\\n')], { type: 'text/csv' }));
+    a.download = (activeList || 'creators') + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
   } else if (act === 'camptab') {
     campTab = b.dataset.v; renderLists();
   } else if (act === 'ctab') {
@@ -2011,6 +2047,8 @@ function draftRow(l, r, camp, free) {
     + (assigned.length
       ? '<button class="vb" data-act="dtoggle" data-cid="' + r.channelId + '">' + (open ? 'Collapse' : 'Expand') + '</button>'
       + '<button class="vb" data-act="copyc" data-cid="' + r.channelId + '">Copy</button>'
+      + (to ? '<button class="vb" data-act="gmailc" data-cid="' + r.channelId + '" title="Open this draft in Gmail">Gmail</button>'
+        + '<button class="vb" data-act="mailapp" data-cid="' + r.channelId + '" title="Open in your default mail app">Mail</button>' : '')
       + '<button class="vb ' + (sent ? '' : 'ok') + '" data-act="' + (sent ? 'markunsent' : 'marksent') + '" data-cid="' + r.channelId + '">'
       + (sent ? 'Mark unsent' : 'Mark sent') + '</button>'
       : '')
@@ -2026,6 +2064,7 @@ function renderPreviews() {
   $('cpreviews').innerHTML =
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
     + '<span style="margin-left:auto"></span>'
+    + '<button class="ltab" data-act="csvexp" style="font-size:11px">Export CSV</button>'
     + '<button class="ltab" data-act="dexpall" style="font-size:11px">Expand all</button>'
     + '<button class="ltab" data-act="dcolall" style="font-size:11px">Collapse all</button>'
     + (undrafted ? '<button class="btn" data-act="draftall" style="padding:7px 18px;font-size:12px">Draft all (' + undrafted + ')</button>' : '')
@@ -2328,7 +2367,8 @@ export const handler = async (req, res) => {
       const b = await readBody(req);
       const game = (b.game || '').toLowerCase().trim();
       const out = [];
-      await Promise.all((b.creators || []).slice(0, 60).map(async (c) => {
+      const creators = (b.creators || []).slice(0, 60);
+      await Promise.all(creators.map(async (c) => {
         const vids = await yt.recentVideosRSS(c.channelId, 15).catch(() => []);
         const hit = vids
           .filter((v) => new Date(v.snippet?.publishedAt || 0).getTime() >= (c.since || 0))
@@ -2338,6 +2378,20 @@ export const handler = async (req, res) => {
           video: { videoId: hit.id, title: hit.snippet.title, date: hit.snippet.publishedAt, url: 'https://youtu.be/' + hit.id },
         });
       }));
+      // Merge sightings the daily cron already recorded for these channels.
+      const hitIds = new Set(out.map((h) => h.channelId));
+      const rest = creators.filter((c) => !hitIds.has(c.channelId));
+      if (rest.length && SB_URL && SB_KEY) {
+        const r = await sbRest(`/cf_creators?channel_id=in.(${rest.map((c) => encodeURIComponent(c.channelId)).join(',')})&select=channel_id,data`).catch(() => null);
+        const rows = r ? await r.json().catch(() => []) : [];
+        const gk = normGame(game);
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const s = row.data?.coverageHits?.[gk];
+          const c = rest.find((x) => x.channelId === row.channel_id);
+          if (s && c && new Date(s.date || 0).getTime() >= (c.since || 0))
+            out.push({ channelId: row.channel_id, video: { videoId: s.videoId, title: s.title, date: s.date, url: s.url } });
+        }
+      }
       return json(200, { hits: out });
     }
     if (req.method === 'POST' && url.pathname === '/api/fingerprint') {
@@ -2494,6 +2548,70 @@ strong{color:#e6ebf5}a{color:#8b9dff}.back{display:inline-block;margin-top:32px;
       if (url.pathname === '/api/admin/stats') return json(200, stats);
       res.writeHead(200, { 'Content-Type': 'text/html' });
       return res.end(ADMIN_HTML);
+    }
+    // Daily Vercel cron: sweep every pro user's synced lists for creators who
+    // were marked "sent" but haven't been covered yet, and check their recent
+    // uploads via RSS. Hits are stored as sightings in cf_creators.data so the
+    // client's coverage check picks them up instantly on next open.
+    if (url.pathname === '/api/cron/daily') {
+      const cronOk = process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+      const adminOk = process.env.ADMIN_KEY && (req.headers['x-admin-key'] === process.env.ADMIN_KEY || url.searchParams.get('key') === process.env.ADMIN_KEY);
+      if (!cronOk && !adminOk) return json(403, { error: 'forbidden' });
+      const t0 = Date.now();
+      const pros = await sbRest('/cf_profiles?plan=eq.pro&select=user_id').then((r) => r.json()).catch(() => []);
+      const uids = (Array.isArray(pros) ? pros : []).map((p) => p.user_id);
+      let checked = 0, hits = 0;
+      if (uids.length) {
+        const rows = await sbRest(`/cf_user_lists?user_id=in.(${uids.join(',')})&select=lists`).then((r) => r.json()).catch(() => []);
+        const tasks = new Map();
+        for (const row of Array.isArray(rows) ? rows : [])
+          for (const l of Object.values(row.lists || {})) {
+            const game = String(l.campaign?.game || '').trim();
+            if (!game || !l.sent) continue;
+            for (const [cid, sentAt] of Object.entries(l.sent)) {
+              const ch = (l.channels || {})[cid];
+              if (!ch || (ch.coverage && ch.coverage.confirmed)) continue;
+              const k = cid + '|' + normGame(game);
+              if (!tasks.has(k)) tasks.set(k, { channelId: cid, game, since: sentAt });
+            }
+          }
+        const arr = [...tasks.values()];
+        const sightings = {};
+        for (let i = 0; i < arr.length; i += 6) {
+          if (Date.now() - t0 > 45000) break;
+          await Promise.all(arr.slice(i, i + 6).map(async (t) => {
+            const vids = await yt.recentVideosRSS(t.channelId, 15).catch(() => []);
+            checked++;
+            const hit = vids
+              .filter((v) => new Date(v.snippet?.publishedAt || 0).getTime() >= (t.since || 0))
+              .find((v) => (String(v.snippet?.title) + ' ' + String(v.snippet?.description || '')).toLowerCase().includes(t.game.toLowerCase()));
+            if (hit) {
+              hits++;
+              (sightings[t.channelId] ||= {})[normGame(t.game)] = {
+                videoId: hit.id, title: hit.snippet.title,
+                date: hit.snippet.publishedAt, url: 'https://youtu.be/' + hit.id,
+              };
+            }
+          }));
+        }
+        const ids = Object.keys(sightings);
+        if (ids.length) {
+          const ex = await sbRest(`/cf_creators?channel_id=in.(${ids.map(encodeURIComponent).join(',')})&select=channel_id,data`)
+            .then((r) => r.json()).catch(() => []);
+          const byId = {};
+          for (const row of Array.isArray(ex) ? ex : []) byId[row.channel_id] = row.data || {};
+          await sbRest('/cf_creators', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(ids.map((cid) => ({
+              channel_id: cid,
+              data: { ...byId[cid], coverageHits: { ...(byId[cid].coverageHits || {}), ...sightings[cid] } },
+              updated_at: new Date().toISOString(),
+            }))),
+          });
+        }
+      }
+      return json(200, { ok: true, checked, hits, ms: Date.now() - t0 });
     }
     if (url.pathname.startsWith('/api/auth/')) {
       if (!SB_URL || !SB_KEY) return json(503, { error: 'Accounts not configured' });
