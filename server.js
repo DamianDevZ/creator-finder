@@ -648,6 +648,18 @@ const HTML = `<!DOCTYPE html>
     </div>
   </div>
 
+  <div class="lmodal" id="welmodal" style="display:none">
+    <div class="lmbox" style="position:relative;width:340px;text-align:center;padding:26px 24px">
+      <b style="font-size:16px">Welcome to Creator Finder</b>
+      <div class="meta" style="margin:6px 0 16px;font-size:12px">Find YouTube creators who will actually play your game.</div>
+      <button class="btn" data-act="iammarnix" style="width:100%;justify-content:center;padding:12px;font-size:14px">I am Marnix</button>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="ltab" data-act="welsignup" style="flex:1;justify-content:center;padding:10px;font-size:13px">Sign up</button>
+        <button class="ltab" data-act="welsignin" style="flex:1;justify-content:center;padding:10px;font-size:13px">Sign in</button>
+      </div>
+    </div>
+  </div>
+
   <div class="lmodal" id="tiermodal" style="display:none">
     <div class="lmbox wide" id="tierbox" style="position:relative"></div>
   </div>
@@ -1143,6 +1155,11 @@ async function initSession() {
   } else saveSession(null);
 }
 initSession();
+// First-visit welcome: shows once per device for signed-out visitors.
+if (!session && !localStorage.getItem('cf_welcomed')) {
+  localStorage.setItem('cf_welcomed', '1');
+  $('welmodal').style.display = 'flex';
+}
 
 // ---- Plans ---------------------------------------------------------------
 const PRO_PRICE = '$5';
@@ -1636,6 +1653,26 @@ document.addEventListener('click', async (e) => {
       }).catch(() => { b.disabled = false; $('aerr').textContent = 'Network error.'; });
   } else if (act === 'gauth') {
     location.href = '/api/auth/google';
+  } else if (act === 'iammarnix') {
+    b.disabled = true;
+    fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'marnix@test.com', password: 'marnix test' }) })
+      .then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) }))
+      .then(({ ok, j }) => {
+        b.disabled = false;
+        if (j.access_token) {
+          saveSession({ at: j.access_token, rt: j.refresh_token, email: (j.user && j.user.email) || 'marnix@test.com' });
+          $('welmodal').style.display = 'none';
+          refreshMe(); cloudPull();
+        }
+      });
+  } else if (act === 'welsignup') {
+    $('welmodal').style.display = 'none';
+    openTiers();
+  } else if (act === 'welsignin') {
+    $('welmodal').style.display = 'none';
+    $('aerr').textContent = '';
+    $('authmodal').style.display = 'flex';
+    setTimeout(() => $('aemail').focus(), 50);
   } else if (act === 'forgot') {
     $('authmodal').style.display = 'none';
     $('ferr').textContent = '';
